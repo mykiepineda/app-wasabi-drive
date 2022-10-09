@@ -1,0 +1,16 @@
+.container {
+  margin-top: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 20px;
+  border-top: 1px solid rgba(224, 224, 224, 1);
+  height: 50px;
+}
+
+.container p {
+  color: #757575;
+  font-size: 0.875rem;
+  font-family: "Roboto", "Helvetica", "Arial", sans-serif;
+  font-weight: 400;
+}

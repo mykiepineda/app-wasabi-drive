@@ -1,0 +1,26 @@
+.container {
+  display: flex;
+  align-items: center;
+  translate: -6px;
+}
+
+.link {
+  padding: 7px;
+  margin: 6px;
+  color: #466fb6;
+}
+
+.link:not(.active) {
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.link:not(.active):hover {
+  text-decoration: underline;
+}
+
+.active {
+  color: rgb(53, 53, 53);
+  font-weight: 700;
+  font-weight: 14px;
+}

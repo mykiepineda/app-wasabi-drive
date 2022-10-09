@@ -1,0 +1,3 @@
+.container select:after {
+    background-color: red;
+}

@@ -1,0 +1,22 @@
+.button {
+  padding: 12px;
+}
+
+.button:not(.disabled):hover {
+  border-radius: 50%;
+  background-color: rgba(0, 0, 0, 0.04);
+}
+
+.button div {
+  width: 21px;
+  height: 21px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.disabled {
+  cursor: default;
+  color: rgba(0, 0, 0, 0.26);
+  background-color: transparent;
+}
