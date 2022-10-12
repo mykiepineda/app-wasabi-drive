@@ -116,7 +116,7 @@ const Home = () => {
 
     const fetchRegion = async (bucket) => {
       const response = await fetch(
-        `${process.env.REACT_APP_API_URL}/${bucket}/region`,
+        `${process.env.REACT_APP_API_URL}/buckets/${bucket}/region`,
         {
           method: "GET",
           headers: {
@@ -138,7 +138,7 @@ const Home = () => {
         pageHistory,
       } = paginationContext;
 
-      let path = `${process.env.REACT_APP_API_URL}/${bucket}/objects/`;
+      let path = `${process.env.REACT_APP_API_URL}/buckets/${bucket}/objects/`;
       let breadcrumb = null;
 
       if (prefix) {
