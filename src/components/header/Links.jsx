@@ -1,4 +1,4 @@
-import { useContext } from "react";
+import { useMsal } from "@azure/msal-react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faTerminal,
@@ -7,7 +7,7 @@ import {
 } from "@fortawesome/free-solid-svg-icons";
 
 import classes from "./Links.module.css";
-import AuthContext from "../../store/auth-context";
+import { msalConfig } from "../../auth/msal-config";
 
 const ConsoleManagement = () => {
   return (
@@ -25,11 +25,14 @@ const ConsoleManagement = () => {
   );
 };
 
-const Logout = ({ logout }) => {
-  const authCtx = useContext(AuthContext);
+const Logout = () => {
+  const { instance, accounts } = useMsal();
 
   const logoutHandler = () => {
-    authCtx.logout();
+    instance.logoutRedirect({
+      account: accounts[0],
+      postLogoutRedirectUri: msalConfig.auth.postLogoutRedirectUri,
+    });
   };
 
   return (
@@ -42,12 +45,14 @@ const Logout = ({ logout }) => {
   );
 };
 
-const User = ({ user }) => {
-  const authCtx = useContext(AuthContext);
+const User = () => {
+  const { accounts } = useMsal();
+  const account = accounts[0];
+
   return (
     <div className={classes.user}>
       <FontAwesomeIcon icon={faUser} />
-      <p>{authCtx.user}</p>
+      <p>{account?.username || account?.name}</p>
     </div>
   );
 };

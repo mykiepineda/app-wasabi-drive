@@ -1,10 +1,12 @@
 import { useEffect, useState } from "react";
+import { useMsal } from "@azure/msal-react";
 import classes from "./Home.module.css";
 import BucketContext from "../store/bucket-context";
 import PaginationContext from "../store/pagination-context";
 import Spinner from "../components/ui/Spinner";
 import Header from "../components/header/Header";
 import Contents from "../components/main/Contents";
+import { authenticatedFetch } from "../auth/api-client";
 
 const TURN_PAGE_FORWARD = "forward";
 const TURN_PAGE_BACKWARD = "backward";
@@ -31,6 +33,8 @@ const breadcrumbsReducer = (state, action) => {
 };
 
 const Home = () => {
+  const { instance, accounts } = useMsal();
+  const account = accounts[0];
   const [isLoading, setIsLoading] = useState(true);
   const [contents, setContents] = useState({
     breadcrumbs: [],
@@ -75,12 +79,14 @@ const Home = () => {
 
   useEffect(() => {
     const fetchBuckets = async () => {
-      const response = await fetch(`${process.env.REACT_APP_API_URL}/buckets`, {
-        method: "GET",
-        headers: {
-          "X-Api-Key": process.env.REACT_APP_API_KEY,
-        },
-      });
+      const response = await authenticatedFetch(
+        instance,
+        account,
+        `${process.env.REACT_APP_API_URL}/buckets`,
+        {
+          method: "GET",
+        }
+      );
       const results = await response.json();
       const buckets = results.Buckets;
       const initialBreadcrumbsState = [
@@ -115,13 +121,12 @@ const Home = () => {
     };
 
     const fetchRegion = async (bucket) => {
-      const response = await fetch(
+      const response = await authenticatedFetch(
+        instance,
+        account,
         `${process.env.REACT_APP_API_URL}/buckets/${bucket}/region`,
         {
           method: "GET",
-          headers: {
-            "X-Api-Key": process.env.REACT_APP_API_KEY,
-          },
         }
       );
       return await response.json();
@@ -180,11 +185,8 @@ const Home = () => {
         path = `${path}&ContinuationToken=${continuationToken}`;
       }
 
-      const response = await fetch(path, {
+      const response = await authenticatedFetch(instance, account, path, {
         method: "GET",
-        headers: {
-          "X-Api-Key": process.env.REACT_APP_API_KEY,
-        },
       });
       const body = await response.json();
 
@@ -273,7 +275,7 @@ const Home = () => {
     } else {
       fetchObjects();
     }
-  }, [navigation, turnPage]);
+  }, [account, instance, navigation, turnPage]);
 
   const objectClickHandler = (event) => {
     event.stopPropagation();

@@ -1,11 +1,12 @@
-import { Fragment, useContext } from "react";
+import { Fragment } from "react";
+import { useMsal } from "@azure/msal-react";
 import Home from "./pages/Home";
 import Login from "./pages/Login";
-import AuthContext from "./store/auth-context";
 
 const App = () => {
-  const authCtx = useContext(AuthContext);
-  const { isLoggedIn } = authCtx;
+  const { accounts } = useMsal();
+  const isLoggedIn = accounts.length > 0;
+
   return (
     <Fragment>
       {!isLoggedIn && <Login />}

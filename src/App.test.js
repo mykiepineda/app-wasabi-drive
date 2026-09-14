@@ -1,12 +1,30 @@
-import { render, screen } from '@testing-library/react';
-import App from './App';
+import { render, screen } from "@testing-library/react";
+import { useMsal } from "@azure/msal-react";
+import App from "./App";
 
-test('renders the unauthenticated login interface', () => {
+jest.mock("@azure/msal-react", () => ({
+  useMsal: jest.fn(),
+}));
+jest.mock("./pages/Home", () => () => null);
+
+test("renders the Microsoft sign-in interface when unauthenticated", () => {
+  useMsal.mockReturnValue({ accounts: [] });
+
   render(<App />);
 
   expect(
-    screen.getByRole('textbox', { name: /root account email or alias/i })
+    screen.getByRole("button", { name: /sign in with microsoft/i })
   ).toBeInTheDocument();
-  expect(screen.getByLabelText(/password/i)).toBeInTheDocument();
-  expect(screen.getByRole('button', { name: /sign in/i })).toBeInTheDocument();
+});
+
+test("renders the application when an MSAL account is present", () => {
+  useMsal.mockReturnValue({
+    accounts: [{ username: "user@example.com" }],
+  });
+
+  render(<App />);
+
+  expect(
+    screen.queryByRole("button", { name: /sign in with microsoft/i })
+  ).not.toBeInTheDocument();
 });
