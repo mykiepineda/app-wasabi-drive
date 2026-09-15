@@ -31,6 +31,22 @@ test("uses redirect acquisition only when MSAL requires interaction", async () =
   });
 });
 
+test("does not call the API after redirect-based token acquisition", async () => {
+  const fetchMock = jest.spyOn(global, "fetch");
+  const instance = {
+    acquireTokenSilent: jest
+      .fn()
+      .mockRejectedValue(new InteractionRequiredAuthError("interaction_required")),
+    acquireTokenRedirect: jest.fn().mockResolvedValue(undefined),
+  };
+
+  await expect(
+    authenticatedFetch(instance, { homeAccountId: "account-id" }, "/buckets")
+  ).resolves.toBeNull();
+  expect(fetchMock).not.toHaveBeenCalled();
+  fetchMock.mockRestore();
+});
+
 test("adds the bearer token while preserving the API key header", async () => {
   const fetchMock = jest
     .spyOn(global, "fetch")

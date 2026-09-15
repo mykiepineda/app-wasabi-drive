@@ -87,6 +87,9 @@ const Home = () => {
           method: "GET",
         }
       );
+      if (!response) {
+        return;
+      }
       const results = await response.json();
       const buckets = results.Buckets;
       const initialBreadcrumbsState = [
@@ -129,6 +132,9 @@ const Home = () => {
           method: "GET",
         }
       );
+      if (!response) {
+        return null;
+      }
       return await response.json();
     };
 
@@ -188,6 +194,9 @@ const Home = () => {
       const response = await authenticatedFetch(instance, account, path, {
         method: "GET",
       });
+      if (!response) {
+        return;
+      }
       const body = await response.json();
 
       let folders = [];
