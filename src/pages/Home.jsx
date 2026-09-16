@@ -6,7 +6,11 @@ import PaginationContext from "../store/pagination-context";
 import Spinner from "../components/ui/Spinner";
 import Header from "../components/header/Header";
 import Contents from "../components/main/Contents";
-import { authenticatedFetch } from "../auth/api-client";
+import {
+  API_ERROR_MESSAGES,
+  ApiRequestError,
+  authenticatedFetch,
+} from "../auth/api-client";
 
 const TURN_PAGE_FORWARD = "forward";
 const TURN_PAGE_BACKWARD = "backward";
@@ -36,6 +40,7 @@ const Home = () => {
   const { instance, accounts } = useMsal();
   const account = accounts[0];
   const [isLoading, setIsLoading] = useState(true);
+  const [errorMessage, setErrorMessage] = useState(null);
   const [contents, setContents] = useState({
     breadcrumbs: [],
     buckets: [],
@@ -279,11 +284,24 @@ const Home = () => {
 
     // Main
     setIsLoading(true);
-    if (navigation.isHomePage) {
-      fetchBuckets();
-    } else {
-      fetchObjects();
-    }
+    setErrorMessage(null);
+    const fetchPage = navigation.isHomePage ? fetchBuckets : fetchObjects;
+
+    fetchPage()
+      .catch((error) => {
+        setContents({
+          breadcrumbs: [],
+          buckets: [],
+          folders: [],
+          files: [],
+        });
+        setErrorMessage(
+          error instanceof ApiRequestError
+            ? error.message
+            : API_ERROR_MESSAGES.service
+        );
+      })
+      .finally(() => setIsLoading(false));
   }, [account, instance, navigation, turnPage]);
 
   const objectClickHandler = (event) => {
@@ -346,14 +364,18 @@ const Home = () => {
         <Header />
         <main className={classes.root}>
           {isLoading && <Spinner />}
-          <Contents
-            contents={contents}
-            onBucketClick={bucketClickHandler}
-            onObjectClick={objectClickHandler}
-            onPreviousPageClick={previousPageClickHandler}
-            onNextPageClick={nextPageClickHandler}
-            isHomePage={navigation.isHomePage}
-          />
+          {errorMessage ? (
+            <p role="alert">{errorMessage}</p>
+          ) : (
+            <Contents
+              contents={contents}
+              onBucketClick={bucketClickHandler}
+              onObjectClick={objectClickHandler}
+              onPreviousPageClick={previousPageClickHandler}
+              onNextPageClick={nextPageClickHandler}
+              isHomePage={navigation.isHomePage}
+            />
+          )}
         </main>
       </BucketContext.Provider>
     </PaginationContext.Provider>
