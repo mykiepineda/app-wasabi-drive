@@ -54,7 +54,6 @@ export const authenticatedFetch = async (
       headers: {
         ...(options.headers || {}),
         Authorization: `Bearer ${accessToken}`,
-        "X-Api-Key": process.env.REACT_APP_API_KEY,
       },
     });
   } catch {
