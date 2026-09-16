@@ -1,517 +1,216 @@
 # Wasabi Drive SPA - Copilot Instructions
 
-## Project status and current goal
+## Project status
 
-Wasabi Drive SPA is an existing production-working React application for
-browsing files stored in Wasabi Cloud Storage through the Wasabi Drive API.
+Wasabi Drive is an existing production-working React SPA hosted on Firebase Hosting.
 
-The previous structural-refactoring and production-deployment phase is complete.
+The structural refactor and pre-production Microsoft Entra/MSAL frontend hardening are complete in source.
 
-The current modernization phase is:
+Implemented:
+- Microsoft Entra sign-in through MSAL;
+- OAuth 2.0 access-token acquisition for the Wasabi Drive API;
+- `Authorization: Bearer` API calls;
+- fail-fast validation for required Entra build-time variables;
+- safe handling of `401`, `403`, 5xx, and rejected-fetch/network failures;
+- deliberate user-facing error state while preserving logout;
+- removal of confirmed-unused legacy username/password/UUID frontend UI/state artifacts.
 
-**Microsoft Entra identity and API authorization migration.**
+Verified against AWS `test` before the final hardening:
+- trusted Entra user can browse buckets/folders/objects;
+- valid but untrusted Entra user receives backend `403`;
+- backend authentication/authorization behavior is established.
 
-The frontend Entra/MSAL migration has now been implemented on `master` and
-successfully validated locally against the real Microsoft Entra tenant.
+Production has not yet been cut over to Entra enforcement.
 
-The confirmed local integration includes:
+The current frontend objective is NOT further application refactoring. The immediate work is production build verification and controlled Firebase deployment as part of the compatibility-first identity cutover.
 
-- Microsoft sign-in through MSAL;
-- successful return to the SPA after Entra authentication;
-- authenticated rendering of the existing application;
-- acquisition of the Wasabi Drive API access token;
-- existing bucket/object browsing features continuing to work;
-- storage API requests carrying the Entra bearer token while retaining the
-  transitional `X-Api-Key` header.
-
-The backend storage routes do **not** yet enforce the Entra bearer token.
-Backend enforcement, test-stage integration, trusted-user authorization, and
-legacy-auth removal are separate coordinated tasks.
-
-Do not broaden the current work into unrelated frontend modernization.
-
-The developer is the technical owner and architectural decision-maker.
-Copilot assists implementation; it does not independently redesign the system.
+The developer is the technical owner and architectural decision-maker. Copilot assists implementation only when explicitly requested.
 
 ## Branch and repository safety
 
-`master` is the protected integration/release branch.
+`master` is protected.
 
 Never commit implementation changes directly to `master`.
 
-Use a focused task branch appropriate to the requested task, for example:
+The developer creates focused branches manually and uses Copilot Chat in the normal workspace. Work only in the current workspace and current branch. Do not create another branch or worktree unless explicitly instructed.
 
-- `fix/entra-spa-integration-readiness`;
-- `feature/entra-api-cutover`;
-- `cleanup/remove-legacy-auth-ui`.
+Do not modify this file unless explicitly authorized.
 
-Keep each branch limited to one reviewable responsibility.
+Avoid unrelated cleanup.
 
-Do not automatically continue to another modernization task after completing
-the requested work.
+## Current frontend architecture
 
-Do not make unrelated formatting, cleanup, dependency, or architectural
-changes.
-
-## Current architecture
-
-Preserve these established characteristics unless a task explicitly changes
-them:
-
+Preserve:
 - React 18;
 - JavaScript;
 - Create React App / `react-scripts` 5;
 - Firebase Hosting;
+- `@azure/msal-browser` and `@azure/msal-react`;
+- MSAL session-storage cache;
 - no React Router;
-- React Context for bucket/pagination state;
-- MSAL for frontend authentication;
-- direct `fetch`-based Wasabi Drive API access behind a small authentication
-  helper;
-- CSS Modules for component styling.
+- no Redux/global state framework;
+- no custom OAuth implementation.
 
-Current authentication-related flow is:
+Identity flow:
 
-- `src/index.js` creates the MSAL public-client application and wraps the React
-  application with `MsalProvider`;
-- `src/auth/msal-config.js` owns MSAL configuration and the Wasabi Drive API
-  scope;
-- `src/App.jsx` uses MSAL account and interaction state to decide whether to
-  render the login UI, loading UI, or authenticated application;
-- `src/pages/Login.jsx` signs the user in with Microsoft through
-  `loginRedirect`;
-- `src/components/header/Links.jsx` signs the user out through
-  `logoutRedirect` and displays safe MSAL account information;
-- `src/auth/api-client.js` obtains the Wasabi Drive API access token and adds
-  the bearer header to API calls;
-- `src/pages/Home.jsx` uses the authenticated API helper for bucket/object
-  requests;
-- storage API calls currently send both `Authorization: Bearer <access-token>`
-  and the transitional `X-Api-Key` header.
-
-Legacy frontend username/password/UUID authentication artifacts may still exist
-in the repository but are no longer the active UI authentication path. Treat
-them as migration remnants scheduled for later cleanup after coordinated
-backend cutover.
-
-Do not reintroduce the legacy username/password flow.
-
-Do not introduce React Router, Redux, another state-management framework,
-TypeScript, Vite, Next.js, or another frontend framework/toolchain unless an
-explicit task approves it.
-
-Prefer the smallest concrete boundary needed for the current task.
-
-## Approved Microsoft Entra authentication architecture
-
-The approved target is:
-
-React SPA
--> MSAL
+React/MSAL
 -> Microsoft Entra
--> OAuth 2.0 / OpenID Connect authorization-code flow with PKCE
--> Wasabi Drive API access token
--> API Gateway REST API
--> Express token validation
--> application authorization
--> Wasabi services.
+-> OAuth 2.0 / OpenID Connect access token
+-> Wasabi Drive API
+-> backend authentication
+-> backend trusted-user authorization
+-> Wasabi.
 
-MSAL means Microsoft Authentication Library.
+MSAL = Microsoft Authentication Library.
+OIDC = OpenID Connect.
+PKCE = Proof Key for Code Exchange.
 
-OIDC means OpenID Connect.
+The browser is a public client and must never contain an Entra client secret.
 
-PKCE means Proof Key for Code Exchange. It protects the authorization-code
-exchange for public clients such as browser SPAs that cannot safely hold a
-client secret.
+## Backend is the security authority
 
-Use the authorization-code flow with PKCE.
+The frontend does not authorize users.
 
-Do not use the legacy implicit grant flow.
+Do not:
+- decode access tokens for application authorization;
+- inspect `oid` to determine trust;
+- maintain a trusted-user allow-list;
+- infer authorization from MSAL account presence;
+- treat the browser-visible API key as user authentication.
 
-The SPA is a public client and must never contain an Entra client secret,
-certificate private key, or other confidential-client credential.
+The frontend obtains the token, calls the API, and presents backend outcomes.
 
-Do not enable or depend on Entra settings intended for legacy implicit-flow
-access tokens or ID tokens.
+## Entra configuration
 
-## Entra application model
-
-The Entra configuration uses separate application registrations for:
-
-- the Wasabi Drive SPA client; and
-- the Wasabi Drive backend API/resource server.
-
-The SPA requests an **access token intended for the Wasabi Drive API**.
-
-Do not use an ID token as API authorization.
-
-The API permission is a delegated permission: the SPA calls the Wasabi Drive
-API on behalf of the signed-in user.
-
-Environment-specific identifiers and API scopes must be supplied through the
-established frontend environment configuration rather than scattered through
-components.
-
-## Redirect URI rules
-
-The approved SPA redirect locations are root URLs for local development and
-Firebase Hosting.
-
-The current implementation derives the redirect and post-logout redirect URI
-from:
-
-`${window.location.origin}/`
-
-This is intentional.
-
-Do not hard-code separate environment-specific redirect logic into components.
-
-Do not add callback routes or React Router solely for Entra authentication.
-
-Do not change Entra redirect-URI behavior unless an explicitly approved task
-requires it.
-
-## MSAL token handling
-
-MSAL owns the authentication/token cache.
-
-The current MSAL cache location is `sessionStorage`.
-
-Do not manually persist Entra access tokens, ID tokens, refresh tokens, or raw
-authentication responses in application-created local-storage/session-storage
-records.
-
-Do not place an Entra access token in the old legacy `authentication` storage
-shape.
-
-Acquire the Wasabi Drive API access token through MSAL when needed, normally
-using `acquireTokenSilent` for an authenticated account.
-
-Interactive token acquisition may be used only when MSAL reports
-`InteractionRequiredAuthError`.
-
-The current request helper may initiate `acquireTokenRedirect`; callers must
-continue to handle that redirect path safely and must not dereference an absent
-fetch response.
-
-Never log bearer/access tokens or place them in error messages, test snapshots,
-reports, URLs, source code, or committed configuration.
-
-Application UI may use safe account/profile claims supplied by MSAL, but must
-not treat display names or email addresses as backend authorization keys.
-
-Frontend authenticated state is not backend authorization.
-
-## Compatibility-first migration
-
-The backend is being migrated separately.
-
-Current production/test storage routes may not yet require Entra bearer
-authentication, depending on the explicitly approved backend migration step.
-
-Preserve staged compatibility.
-
-During the current transition:
-
-- acquire an Entra access token for the Wasabi Drive API;
-- send it as `Authorization: Bearer <access-token>` on storage API requests;
-- preserve the existing `X-Api-Key` header until a later explicitly approved
-  cleanup step;
-- do not assume that adding a bearer token means backend enforcement is active;
-- do not remove compatibility behavior required by the deployed backend unless
-  the task explicitly represents the coordinated cutover.
-
-Do not independently change backend route behavior from this repository.
-
-Breaking frontend/backend contract changes require an explicit migration and
-rollback plan.
-
-## Legacy authentication migration
-
-The old frontend username/password/UUID authentication path is no longer the
-active login path and is scheduled for cleanup after Entra cutover is proven.
-
-Do not spend effort redesigning or improving legacy authentication code that
-will be deleted.
-
-Do not add refresh-token behavior, improve UUID semantics, redesign legacy
-password forms, or create new legacy authentication abstractions.
-
-Do not restore legacy authentication as a fallback unless an explicitly
-approved rollback/compatibility task requires it.
-
-Remove unused legacy frontend authentication files only in a separately scoped
-cleanup task after backend Entra enforcement and production cutover have been
-validated.
-
-Backend MongoDB/bcrypt/UUID cleanup belongs to the backend repository and is a
-separate task.
-
-## API request rules
-
-The current storage API calls are concentrated primarily in
-`src/pages/Home.jsx`.
-
-`src/auth/api-client.js` is the small authentication-aware request boundary.
-
-Preserve this proportionate structure unless a concrete requirement justifies
-something more.
-
-Do not perform a broad networking-layer refactor merely because authentication
-exists.
-
-Current storage requests contain:
-
-- `Authorization: Bearer <access-token>`;
-- the existing `X-Api-Key` compatibility header.
-
-Do not treat `X-Api-Key` as user authentication or as a secret.
-
-Do not place bearer tokens in query strings.
-
-Do not decode access tokens in the frontend to make authorization decisions.
-
-The backend remains the security authority.
-
-## Direct Wasabi object URLs and corporate-network testing
-
-`src/components/main/File.jsx` currently constructs direct browser URLs to
-Wasabi object storage in the form:
-
-`https://s3.<region>.wasabisys.com/<bucket>/<key>`
-
-Those URLs are used for file links and for browser-loaded image/video content.
-
-A successful local Entra integration test on a work-managed laptop showed that
-the application and authenticated API features work, while direct Wasabi
-object URLs/thumbnails are blocked by the employer's IT policy for cloud
-storage.
-
-Treat that result as an **environment/network-policy constraint**, not as proof
-of an application regression.
-
-Do not change thumbnail/file-link architecture solely because a corporate
-endpoint-security or web-filtering policy blocks `wasabisys.com`.
-
-If the same failure is reproduced on an unrestricted personal network/device,
-report it separately and investigate it as an application/storage-access issue.
-
-There is existing deferred technical debt around direct object URLs and a
-possible future proxy/CDN design. Do not implement a proxy, CDN, signed-URL
-service, or other delivery architecture during an unrelated Entra task.
-
-## Configuration and secrets
-
-Create React App exposes variables prefixed with `REACT_APP_` to the browser
-bundle.
-
-Therefore frontend environment values must never be treated as secrets.
-
-Tracked files must never contain:
-
-- client secrets;
-- passwords;
-- bearer/access tokens;
-- refresh tokens;
-- private keys;
-- AWS credentials;
-- Wasabi credentials;
-- authenticated database URIs.
-
-Entra tenant IDs, application/client IDs, authority URLs, and API scope
-identifiers are not secrets, but they are environment-specific configuration
-and should be represented through the established environment configuration
-pattern.
-
-Keep real local `.env` files untracked.
-
-Keep `.env.example` limited to documented placeholders/non-secret examples.
-
-Do not add a client secret to the SPA under any name.
-
-Current Entra-related frontend environment names are:
-
+Required Entra build-time variables:
 - `REACT_APP_ENTRA_TENANT_ID`;
 - `REACT_APP_ENTRA_CLIENT_ID`;
 - `REACT_APP_ENTRA_API_SCOPE`.
 
-Preserve existing API environment configuration during the compatibility
-period unless an explicitly approved task changes it.
+`src/auth/msal-config.js` validates these before constructing MSAL configuration.
 
-## Firebase Hosting
+Missing/blank required values must fail clearly rather than constructing `login.microsoftonline.com/undefined`.
 
-Firebase Hosting remains the approved frontend hosting platform.
+Create React App embeds `REACT_APP_*` values at dev-server/build time.
 
-Do not migrate hosting providers.
+Do not implement runtime dotenv loading or stage-selection logic in browser code.
 
-Do not deploy to Firebase unless the task explicitly authorizes deployment.
+For current manual workflows:
+- `.env.local` may be used for local development against AWS `test`;
+- `.env.production.local` may be used for a manual production build;
+- both remain untracked.
 
-Do not modify Firebase project configuration, rewrites, domains, or production
-hosting behavior unless required by the approved task.
+Before production deployment verify `REACT_APP_API_URL` points to the production API and the Entra tenant/client/scope values are the approved production values.
 
-React environment variables are embedded into the production bundle at build
-time. Production Entra/API configuration must therefore be present at build
-time when deployment is eventually authorized.
+## API client and error behavior
 
-## Test and build gates
+`src/auth/api-client.js` is the authentication/network boundary.
 
-Standard non-interactive frontend test command:
+It:
+- attempts silent access-token acquisition;
+- uses MSAL redirect when user interaction is required;
+- adds `Authorization: Bearer <token>`;
+- still sends transitional `X-Api-Key`;
+- maps `401` to an authentication/session message;
+- maps `403` to access denied;
+- maps other non-success responses to a generic service error;
+- maps rejected `fetch()` calls to a generic connectivity/service error.
 
-`npm run test:ci`
+Do not expose raw tokens, Object IDs, allow-list values, backend stack traces, or raw security payloads.
 
-Standard production build command:
+Do not redirect-loop on `403`.
 
-`npm run build`
+Do not add Axios or another HTTP framework merely for networking.
 
-For behavior-preserving changes:
+## Transitional API key
 
-1. run the applicable test gate before the change where the environment permits;
-2. record the baseline;
-3. run tests again after the change;
-4. run a production build after implementation;
-5. preserve unrelated passing behavior.
+`X-Api-Key` remains temporarily for production compatibility.
 
-Do not delete, skip, or weaken assertions merely to make a change pass.
+It is browser-visible and must not be treated as a secret or user authentication.
 
-For Entra authentication work, preserve focused coverage for behavior such as:
+Do not remove it until production Entra cutover is stable and the backend/API Gateway usage-plan decision is handled as a separate task.
 
-- MSAL startup/interaction state;
-- unauthenticated sign-in UI;
-- authenticated account state;
-- sign-in action;
-- sign-out action;
-- access-token acquisition using the Wasabi Drive API scope;
-- bearer-token attachment to storage API requests;
-- preservation of the transitional `X-Api-Key`;
-- safe handling when token acquisition requires user interaction.
+## Direct Wasabi object URLs
 
-Mock MSAL/network boundaries in unit tests.
+`src/components/main/File.jsx` constructs direct Wasabi object URLs.
 
-Do not make unit tests depend on interactive Entra login or live Microsoft
-endpoints.
+This is established behavior and works from an unrestricted personal network.
 
-Manual live Entra testing is a separate integration checkpoint and should not
-replace automated unit/build gates.
+A corporate network previously blocked those direct cloud-storage URLs; do not redesign object delivery solely for that employer-network restriction.
 
-## Current verified integration checkpoint
+Whether object content itself must be private behind Entra is a separate explicit security/architecture decision. If the Wasabi objects are public-readable, API authentication protects discovery/listing but does not make the direct object URL private.
 
-The frontend has been manually tested locally against the real Entra tenant.
+Do not silently introduce a proxy/CDN/presigned-URL redesign without an approved requirement.
 
-Confirmed:
+## Testing gates
 
-- Microsoft account sign-in succeeds;
-- the SPA returns successfully from the Entra redirect;
-- the authenticated application renders;
-- existing application browsing features continue to work;
-- the current Entra-enabled frontend does not require rollback based on that
-  test.
+Run:
+- `npm run test:ci`;
+- `npm run build`.
 
-Not yet implied by this checkpoint:
+Preserve focused tests for:
+- MSAL startup/account behavior;
+- Entra config fail-fast validation;
+- silent token acquisition and interaction-required redirect;
+- Authorization header behavior;
+- `401`, `403`, and service/network error mapping;
+- Home error rendering and logout availability.
 
-- backend bearer-token enforcement;
-- trusted-user authorization;
-- production Entra cutover;
-- removal of `X-Api-Key`;
-- removal of legacy backend authentication/MongoDB;
-- removal of unused legacy frontend auth files;
-- resolution of employer network policies that block direct Wasabi object
-  URLs.
+Do not call live Microsoft Entra or the live API from unit tests.
 
-Do not represent these later steps as completed until they are explicitly
-implemented and verified.
+Do not weaken tests merely to make changes pass.
 
-## Dependency changes
+## Production deployment safety
 
-Do not run broad dependency upgrades.
+Do not deploy unless explicitly requested.
 
-For an approved dependency task:
+Firebase Hosting remains the deployment target.
 
-- modify only the required direct dependencies;
-- allow necessary lockfile changes;
-- keep `package.json` and `package-lock.json` synchronized;
-- do not run broad `npm audit fix` or `npm audit fix --force`;
-- report unrelated findings separately.
+Production rollout is compatibility-first:
+1. run frontend tests/build locally;
+2. build with verified production API URL and Entra values;
+3. deploy frontend while production backend `ENTRA_AUTH_ENABLED=false`;
+4. verify Microsoft sign-in and existing production browsing;
+5. only then enable/deploy backend production Entra authentication + trusted-user authorization.
 
-Current MSAL dependencies are established parts of the authentication design.
+The frontend can send bearer tokens while the compatibility-mode backend does not yet require them.
 
-Use Microsoft's supported MSAL libraries rather than implementing
-OAuth/OIDC/PKCE manually.
+Keep the current production release available for rollback until cutover is stable.
 
-Do not upgrade React, `react-scripts`, MSAL, Firebase tooling, Font Awesome, or
-other unrelated dependencies during a backend-cutover/authorization task unless
-explicitly requested.
+## Post-cutover deferred work
 
-## Known deferred technical debt
+Do not opportunistically implement before production cutover:
+- remove `X-Api-Key`;
+- remove unused frontend `aws-sdk` dependency;
+- migrate Create React App;
+- upgrade React broadly;
+- add React Router or Redux;
+- redesign direct Wasabi object delivery;
+- introduce CDN/proxy architecture;
+- implement CI/CD.
 
-Do not opportunistically fix these during authentication work unless they block
-the task:
+CORS is controlled on the backend/API Gateway side and is not frontend authentication.
 
-- `aws-sdk` appears to be an unused frontend dependency;
-- API calls are still concentrated in `Home.jsx`;
-- frontend test coverage remains intentionally focused rather than broad;
-- the application has no centralized error boundary;
-- the application has no React Router;
-- styling/UI cleanup is possible;
-- direct browser access to Wasabi object URLs may later be reconsidered;
-- a proxy/CDN/object-delivery design is deferred;
-- employer/corporate filtering may block direct `wasabisys.com` object access;
-- broader frontend dependency modernization may later be evaluated;
-- the legacy `X-Api-Key` header remains transitional compatibility debt;
-- unused legacy username/password/UUID frontend artifacts remain pending
-  coordinated cleanup.
+## CI/CD
 
-These items should be handled only in separately approved tasks.
+CI/CD is not yet implemented.
 
-## Current migration sequence
+Future direction may use GitHub Actions to run frontend tests/builds and deploy Firebase after controlled approval.
 
-The intended sequence from the current checkpoint is approximately:
-
-1. keep the successfully tested frontend Entra implementation stable;
-2. activate/configure Entra token validation for the backend AWS `test` stage;
-3. protect the approved storage routes in the `test` stage;
-4. validate the frontend end-to-end against the protected `test` API;
-5. introduce/validate the simple trusted-user authorization layer;
-6. plan and execute the coordinated production cutover;
-7. remove unused legacy frontend authentication artifacts;
-8. remove backend MongoDB/bcrypt/UUID authentication if it has no remaining
-   business purpose;
-9. remove the transitional `X-Api-Key` header unless a real API Gateway
-   usage-plan requirement remains.
-
-Do not skip compatibility/rollback planning for the enforcement and production
-cutover steps.
-
-Do not implement later sequence items merely because they appear here. Each
-requires an explicitly scoped task.
-
-## Refactoring discipline
-
-For each task:
-
-1. read this file in full before changing code;
-2. understand the existing responsibility and tests;
-3. make the smallest change needed for the approved task;
-4. preserve unrelated application behavior;
-5. avoid unrelated cleanup and formatting;
-6. keep the diff reviewable;
-7. make commits independently understandable;
-8. stop when the requested task is complete.
-
-The application is already deployed and working. Preserving deployability and
-migration compatibility is more important than maximizing refactoring scope.
+Do not implement CI/CD unless explicitly requested.
 
 ## Completion report
 
-For each implementation task report:
-
-- branch used;
+For every Copilot task report:
+- current branch;
+- commits created;
 - files changed;
-- dependencies/configuration changed;
-- baseline/final unit-test result;
-- production-build result;
-- behavior intentionally changed;
-- compatibility impact;
+- behavior/configuration changed;
+- test/build results;
+- `git diff --check`;
 - deployment performed, if explicitly authorized;
+- confirmation no secret/token was committed;
 - remaining issue directly relevant to the task;
 - recommended next task.
 
-Do not automatically implement the recommended next task.
+Stop after the requested task.
