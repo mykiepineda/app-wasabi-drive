@@ -52,8 +52,7 @@ test("does not call the API after redirect-based token acquisition", async () =>
   fetchMock.mockRestore();
 });
 
-test("adds the bearer token while preserving the API key header", async () => {
-  const previousApiKey = process.env.REACT_APP_API_KEY;
+test("adds the bearer token while preserving caller headers and options", async () => {
   const response = { ok: true };
   const fetchMock = jest
     .spyOn(global, "fetch")
@@ -64,29 +63,22 @@ test("adds the bearer token while preserving the API key header", async () => {
     }),
   };
 
-  process.env.REACT_APP_API_KEY = "test-api-key";
-  try {
-    await expect(
-      authenticatedFetch(instance, { homeAccountId: "account-id" }, "/buckets", {
-        method: "GET",
-      })
-    ).resolves.toBe(response);
-
-    expect(fetchMock).toHaveBeenCalledWith("/buckets", {
+  await expect(
+    authenticatedFetch(instance, { homeAccountId: "account-id" }, "/buckets", {
       method: "GET",
-      headers: {
-        Authorization: "Bearer test-access-token",
-        "X-Api-Key": "test-api-key",
-      },
-    });
-  } finally {
-    if (previousApiKey === undefined) {
-      delete process.env.REACT_APP_API_KEY;
-    } else {
-      process.env.REACT_APP_API_KEY = previousApiKey;
-    }
-    fetchMock.mockRestore();
-  }
+      headers: { "X-Caller-Header": "caller-value" },
+    })
+  ).resolves.toBe(response);
+
+  expect(fetchMock).toHaveBeenCalledWith("/buckets", {
+    method: "GET",
+    headers: {
+      "X-Caller-Header": "caller-value",
+      Authorization: "Bearer test-access-token",
+    },
+  });
+  expect(fetchMock.mock.calls[0][1].headers).not.toHaveProperty("X-Api-Key");
+  fetchMock.mockRestore();
 });
 
 test.each([
