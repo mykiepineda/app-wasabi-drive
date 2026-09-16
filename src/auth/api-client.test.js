@@ -1,6 +1,11 @@
 import { InteractionRequiredAuthError } from "@azure/msal-browser";
 import { apiScope } from "./msal-config";
-import { authenticatedFetch, getApiAccessToken } from "./api-client";
+import {
+  API_ERROR_MESSAGES,
+  ApiRequestError,
+  authenticatedFetch,
+  getApiAccessToken,
+} from "./api-client";
 
 test("requests the configured API scope silently", async () => {
   const acquireTokenSilent = jest.fn().mockResolvedValue({
@@ -48,25 +53,64 @@ test("does not call the API after redirect-based token acquisition", async () =>
 });
 
 test("adds the bearer token while preserving the API key header", async () => {
+  const response = { ok: true };
   const fetchMock = jest
     .spyOn(global, "fetch")
-    .mockResolvedValue({ ok: true });
+    .mockResolvedValue(response);
   const instance = {
     acquireTokenSilent: jest.fn().mockResolvedValue({
       accessToken: "test-access-token",
     }),
   };
 
-  await authenticatedFetch(instance, { homeAccountId: "account-id" }, "/buckets", {
-    method: "GET",
-  });
+  await expect(
+    authenticatedFetch(instance, { homeAccountId: "account-id" }, "/buckets", {
+      method: "GET",
+    })
+  ).resolves.toBe(response);
 
   expect(fetchMock).toHaveBeenCalledWith("/buckets", {
     method: "GET",
     headers: {
       Authorization: "Bearer test-access-token",
-      "X-Api-Key": undefined,
+      "X-Api-Key": "replace-with-rc1-api-key",
     },
   });
   fetchMock.mockRestore();
+});
+
+test.each([
+  [401, "authentication"],
+  [403, "authorization"],
+  [500, "service"],
+])("converts HTTP %s into a safe API error", async (status, category) => {
+  jest.spyOn(global, "fetch").mockResolvedValue({ ok: false, status });
+  const instance = {
+    acquireTokenSilent: jest.fn().mockResolvedValue({
+      accessToken: "test-access-token",
+    }),
+  };
+
+  await expect(
+    authenticatedFetch(instance, { homeAccountId: "account-id" }, "/buckets")
+  ).rejects.toMatchObject({
+    category,
+    status,
+    message: API_ERROR_MESSAGES[category],
+  });
+  global.fetch.mockRestore();
+});
+
+test("converts rejected fetch into a service error", async () => {
+  jest.spyOn(global, "fetch").mockRejectedValue(new TypeError("Failed to fetch"));
+  const instance = {
+    acquireTokenSilent: jest.fn().mockResolvedValue({
+      accessToken: "test-access-token",
+    }),
+  };
+
+  await expect(
+    authenticatedFetch(instance, { homeAccountId: "account-id" }, "/buckets")
+  ).rejects.toEqual(new ApiRequestError("service"));
+  global.fetch.mockRestore();
 });
