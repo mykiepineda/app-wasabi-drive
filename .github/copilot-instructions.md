@@ -4,28 +4,29 @@
 
 Wasabi Drive is an existing production React SPA hosted on Firebase Hosting.
 
-The Microsoft Entra identity migration is now live in production.
+The Microsoft Entra identity migration and backend Phase 4 security work through
+Task 4D are complete and production-validated.
 
-Verified production behavior:
+Verified current architecture:
 
 - Microsoft Entra sign-in through MSAL works;
 - the SPA obtains an OAuth 2.0 access token for the Wasabi Drive API;
-- the production backend validates the bearer token;
+- authenticated API calls send `Authorization: Bearer <access-token>`;
+- the backend validates the bearer token;
 - trusted-user authorization is enforced by the backend;
-- no Authorization header -> `401`;
-- valid trusted bearer token without an API key -> `200`;
-- API Gateway no longer requires an API key for the protected application path;
-- the production SPA continues to browse buckets/folders/objects successfully;
-- logout works and returns the user to the sign-in page.
-
-The API key is no longer part of the production security boundary.
+- API Gateway API keys and `X-Api-Key` are no longer part of the application;
+- legacy MongoDB/bcrypt/UUID authentication has been removed from the backend;
+- the backend uses AWS SDK for JavaScript v3 for Wasabi access;
+- authenticated object-list responses now include a short-lived `AccessUrl`
+  property for each object in `Contents`;
+- existing production folder browsing remains operational.
 
 The immediate frontend task is:
 
-**remove the obsolete transitional `X-Api-Key` header and
-`REACT_APP_API_KEY` configuration.**
+**Task 4E - consume backend-authorized `AccessUrl` values instead of
+constructing permanent raw Wasabi object URLs.**
 
-Do not broaden that task into unrelated frontend modernization.
+Do not broaden Task 4E into unrelated frontend modernization.
 
 The developer is the technical owner and architectural decision-maker.
 Copilot assists implementation only.
@@ -67,7 +68,7 @@ Preserve:
 - no Redux/global state framework;
 - no custom OAuth implementation.
 
-Current identity flow:
+Current identity and API flow:
 
 React/MSAL
 -> Microsoft Entra
@@ -75,6 +76,7 @@ React/MSAL
 -> API Gateway REST API
 -> Express authentication
 -> backend trusted-user authorization
+-> backend application/service layer
 -> Wasabi.
 
 MSAL = Microsoft Authentication Library.
@@ -93,7 +95,7 @@ The frontend does not authorize users.
 Do not:
 
 - decode access tokens for application authorization;
-- inspect `oid` to decide whether a user is trusted;
+- inspect Entra Object IDs to decide whether a user is trusted;
 - maintain a trusted-user allow-list;
 - infer authorization from frontend state;
 - introduce another browser credential as an authorization substitute.
@@ -101,10 +103,11 @@ Do not:
 The frontend obtains an access token, sends it to the API, and presents the
 backend result.
 
-## Entra configuration
+## Entra and API configuration
 
-Required Entra build-time variables:
+Required build-time variables:
 
+- `REACT_APP_API_URL`;
 - `REACT_APP_ENTRA_TENANT_ID`;
 - `REACT_APP_ENTRA_CLIENT_ID`;
 - `REACT_APP_ENTRA_API_SCOPE`.
@@ -113,97 +116,129 @@ Required Entra build-time variables:
 constructed.
 
 Missing or blank required Entra values must fail clearly rather than building
-an invalid Microsoft authority such as
-`login.microsoftonline.com/undefined`.
+an invalid Microsoft authority.
 
 Create React App embeds `REACT_APP_*` values at development-server/build time.
 
 Do not introduce runtime dotenv loading or custom stage-selection logic in
 browser code.
 
-The API base URL remains build-time configuration through
-`REACT_APP_API_URL`.
-
-`REACT_APP_API_KEY` is obsolete and should be removed as part of the current
-cleanup task.
+API keys must not be reintroduced.
 
 ## API client
 
-`src/auth/api-client.js` is the authentication/network boundary.
+`src/auth/api-client.js` is the authentication/network boundary for calls to
+the Wasabi Drive backend.
 
-It currently:
+Preserve its current behavior:
 
 - attempts silent access-token acquisition;
 - uses MSAL redirect when user interaction is required;
 - sends `Authorization: Bearer <access-token>`;
+- preserves caller-provided request headers/options;
 - maps `401` to a safe authentication/session error;
 - maps `403` to a safe access-denied error;
 - maps other non-success responses to a generic service error;
 - maps rejected `fetch()` calls to a generic connectivity/service error.
 
-After the current cleanup, the authenticated API request must use the bearer
-token only.
+Do not change token acquisition, caching, or error semantics during Task 4E.
 
-Do not remove or weaken the `Authorization` header.
-
-Do not change token acquisition or token caching.
-
-Do not expose raw access tokens, Object IDs, allow-list values, backend stack
-traces, or raw security error payloads.
+Do not expose raw access tokens, Object IDs, backend stack traces, or raw
+security error payloads.
 
 Do not redirect-loop on `403`.
 
 Do not add Axios or another HTTP framework.
 
-## API-key migration status
+## Backend-authorized object access
 
-The transitional API-key migration is complete.
+The backend now adds `AccessUrl` to each object returned in
+`GET /buckets/:Bucket/objects/:Prefix(*)`.
 
-Production has been verified with:
+`AccessUrl` is a short-lived Wasabi presigned GET URL generated only after the
+request has passed backend Entra authentication and trusted-user authorization.
 
-- no API key + no bearer token -> backend `401`;
-- valid trusted bearer token + no API key -> `200`.
+A presigned URL is a cryptographically signed temporary URL granting a specific
+storage operation for a limited time.
 
-Therefore:
+The complete `AccessUrl` is a temporary bearer capability:
 
-- `X-Api-Key` is no longer required;
-- `REACT_APP_API_KEY` is no longer required;
-- frontend API-key-specific tests/configuration are obsolete;
-- do not reintroduce API-key authentication or compatibility code.
+- anyone possessing an unexpired URL can use the granted GET operation;
+- it is expected to be visible to the browser and Developer Tools;
+- it is not a permanent secret like a Wasabi access key;
+- do not deliberately log, persist, or expose it outside the current UI flow.
 
-Removal of API Gateway usage-plan/API-key resources is a separate
-infrastructure cleanup task and must not be performed from the frontend
-repository.
+Task 4E must replace raw Wasabi URL construction with this backend-provided
+value.
 
-## API error behavior
+Expected frontend data flow:
 
-Preserve deliberate status handling:
+backend `Contents[].AccessUrl`
+-> `Home.jsx` file view model
+-> `Files.jsx`
+-> `File.jsx`
+-> image/video/object link.
 
-- `401` -> authentication/session message;
-- `403` -> signed-in but not authorized message;
-- `5xx` and other non-success statuses -> generic service error;
-- rejected `fetch()` / network failure -> generic connectivity/service error.
+### Task 4E rules
 
-A `403` must not trigger a login loop.
+- Preserve the existing authenticated backend listing call.
+- Carry each backend `Contents[].AccessUrl` forward as a file property such as
+  `accessUrl`.
+- Use that value directly for file links, image `src`, and video source `src`.
+- Treat the URL as opaque. Do not parse it, rebuild it, append query parameters,
+  decode/re-encode it, or generate it in the browser.
+- Do not attach the Entra bearer token to the subsequent direct Wasabi request.
+  The presigned URL itself authorizes the temporary Wasabi GET.
+- Remove raw URL construction such as
+  `https://s3.<region>.wasabisys.com/<bucket>/<key>` from the file-rendering
+  path.
+- Do not fall back to a raw public Wasabi URL if `AccessUrl` is missing.
+- Do not add a new backend call for every thumbnail or file.
+- Do not introduce automatic URL-refresh behavior during this task.
+- Do not proxy file bytes through the backend.
+- Do not introduce CloudFront, another CDN, or a custom file-delivery domain.
+- Do not redesign the UI.
 
-A `5xx`/network failure must not be presented as an authorization failure.
+The signed URL will still use a Wasabi hostname. Corporate networks that block
+Wasabi/cloud-storage domains may therefore still block the object. Do not
+attempt to bypass corporate filtering as part of this task.
 
-The UI must not expose raw backend or Microsoft authentication internals.
+## Relevant current component boundaries
 
-## Direct Wasabi object URLs
+`src/pages/Home.jsx` currently transforms backend `Contents` into the frontend
+file view model. Preserve that responsibility and include the backend
+`AccessUrl` in the mapped file data.
 
-`src/components/main/File.jsx` currently opens direct Wasabi object URLs.
+`src/components/main/Files.jsx` renders the file collection. It should pass the
+already-authorized URL to each `File`.
 
-This behavior is established and is not part of the API-key cleanup.
+`src/components/main/File.jsx` currently constructs a raw Wasabi URL from
+region/bucket/key. Task 4E must remove that construction and use the supplied
+authorized URL for:
 
-A corporate network previously blocked those direct storage URLs. Do not
-redesign object delivery merely for that external network restriction.
+- thumbnail images;
+- video source;
+- the link opened in a new tab.
 
-Whether Wasabi objects themselves must be private behind Entra is a separate
-explicit security/architecture decision.
+Do not move authentication logic into these components.
 
-Do not introduce a proxy, CDN, or presigned-URL design unless separately
-approved.
+`BucketContext` remains used by `SubHeader` for bucket/location presentation.
+Do not broadly refactor that context merely because `File` no longer requires
+bucket/region values to build a URL.
+
+## URL expiry behavior
+
+The backend controls presigned-URL expiry.
+
+The frontend must not assume a particular lifetime and must not parse signing
+parameters.
+
+For the initial implementation, do not add proactive refresh timers or
+background URL renewal. Re-entering/refreshing a folder naturally obtains a
+fresh object-list response and therefore fresh URLs.
+
+If expiry becomes a demonstrated usability problem, handle it in a later
+focused task.
 
 ## Testing gates
 
@@ -224,44 +259,55 @@ Preserve focused tests for:
 - interaction-required redirect behavior;
 - bearer `Authorization` header behavior;
 - caller-provided request headers/options;
+- absence of `X-Api-Key`;
 - `401`, `403`, service, and network error mapping;
 - Home error rendering;
 - logout availability.
 
-For the API-key cleanup, update/remove tests whose only purpose was proving
-`X-Api-Key` compatibility.
+Task 4E should add focused regression coverage demonstrating that:
 
-Add/retain a focused assertion that authenticated API calls contain the bearer
-`Authorization` header and do not contain `X-Api-Key`.
+- backend `AccessUrl` is carried into the frontend file model;
+- `File` uses the supplied authorized URL as the object link;
+- image thumbnails use the supplied authorized URL;
+- video sources use the supplied authorized URL;
+- raw `wasabisys.com/<bucket>/<key>` URL construction is no longer used by the
+  file-rendering path;
+- missing `AccessUrl` does not trigger a raw public-URL fallback.
 
-Do not call live Entra or the live backend from unit tests.
+Do not call live Entra, the live backend, or Wasabi from unit tests.
+
+Use obviously fake signed URLs in tests.
 
 Do not weaken tests merely to make changes pass.
 
-## Production deployment safety
+## Deployment and privacy-cutover safety
 
 Do not deploy unless the task explicitly authorizes deployment.
 
 Firebase Hosting remains the frontend deployment target.
 
-For a production build, verify:
+Task 4E implementation itself must not change Wasabi bucket/object privacy.
 
-- `REACT_APP_API_URL` is the production API;
-- `REACT_APP_ENTRA_TENANT_ID` is correct;
-- `REACT_APP_ENTRA_CLIENT_ID` is correct;
-- `REACT_APP_ENTRA_API_SCOPE` is correct;
-- `REACT_APP_API_KEY` is absent after this cleanup.
+The rollout order is deliberate:
 
-The backend production security boundary is now Entra authentication plus
-trusted-user authorization.
+1. backend presigned-access capability is already deployed;
+2. update the frontend to consume `AccessUrl`;
+3. deploy and verify the frontend against `test` while objects are still public;
+4. make only test Wasabi objects private;
+5. verify signed access still works and unsigned raw access fails;
+6. deploy the compatible frontend to production;
+7. verify production while production objects are still public;
+8. make production Wasabi objects private;
+9. verify production again.
 
-The frontend must not add a replacement API-key-like credential.
+Do not skip directly to production privacy changes.
 
-## Secrets
+## Secrets and sensitive values
 
 Tracked files must never contain:
 
 - bearer/access tokens;
+- complete real presigned URLs;
 - API keys;
 - Entra client secrets;
 - Wasabi credentials;
@@ -276,35 +322,28 @@ through source.
 
 Do not print or persist access tokens.
 
+Do not persist presigned URLs to localStorage/sessionStorage.
+
 ## Deferred frontend work
 
-Do not opportunistically implement during API-key cleanup:
+Do not opportunistically implement during Task 4E:
 
 - Create React App migration;
 - React upgrade;
 - React Router;
 - Redux/global state;
-- direct-object privacy redesign;
-- CDN/proxy work;
-- CI/CD;
+- CDN/proxy/custom-domain object delivery;
+- automatic presigned-URL refresh;
+- corporate-network filtering workarounds;
+- thumbnail-generation redesign;
+- visual redesign;
 - broad dependency upgrades;
-- visual redesign.
+- CI/CD.
 
-Unused dependency cleanup may be considered later as a separate task.
-
-## Post-cutover direction
-
-After the API-key frontend cleanup is deployed and verified, likely subsequent
-project work includes:
-
-- backend physical removal of legacy MongoDB/bcrypt/UUID authentication;
-- obsolete API Gateway API-key/usage-plan infrastructure cleanup if unused;
-- CORS hardening through Infrastructure as Code;
-- decision on private versus public-by-link Wasabi object access;
-- CI/CD;
-- AWS SDK v3 and other deferred technical debt.
-
-Do not implement those from the current frontend cleanup task.
+The direct `aws-sdk` package currently listed in the frontend dependencies
+appears unused by application source. Do not remove it during Task 4E unless
+the task is explicitly expanded; treat dependency cleanup as a separate,
+reviewable maintenance change.
 
 ## Refactoring discipline
 
@@ -327,15 +366,20 @@ Report:
 - current branch;
 - commits created;
 - files changed;
-- runtime behavior changed;
-- configuration removed;
-- tests updated;
+- how `AccessUrl` flows from the backend response to `File`;
+- raw Wasabi URL construction removed;
+- thumbnail/video/link behavior changed;
+- tests added/updated;
 - `npm run test:ci` result;
 - `npm run build` result;
 - `git diff --check` result;
-- confirmation no API key/token/secret was committed;
-- confirmation no deployment occurred unless explicitly authorized;
-- any remaining issue directly relevant to the task;
+- confirmation MSAL/token behavior was unchanged;
+- confirmation no API key was reintroduced;
+- confirmation there is no raw public-URL fallback;
+- confirmation no complete real signed URL/token/secret was committed;
+- confirmation no deployment or Wasabi privacy change occurred unless
+  explicitly authorized;
+- any compatibility concern;
 - recommended next task.
 
 Do not automatically start the recommended next task.

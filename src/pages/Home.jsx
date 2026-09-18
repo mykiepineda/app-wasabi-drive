@@ -224,6 +224,7 @@ const Home = () => {
           return {
             key,
             description,
+            accessUrl: content.AccessUrl,
           };
         });
       }

@@ -43,9 +43,7 @@ const Card = ({ attributes }) => {
   );
 };
 
-const File = ({ region, bucket, prefix, description }) => {
-  //TODO: Proxy URL through a CDN
-  const url = `https://s3.${region}.wasabisys.com/${bucket}/${prefix}`;
+const File = ({ accessUrl, description }) => {
   const idx = description.lastIndexOf(".");
   const fileExtension = description.substring(idx + 1).toLowerCase();
 
@@ -60,7 +58,7 @@ const File = ({ region, bucket, prefix, description }) => {
       ...attributes,
       icon: faImage,
       color: "purple",
-      htmlText: <img src={url} alt={description} />,
+      htmlText: <img src={accessUrl} alt={description} />,
     };
   }
 
@@ -71,7 +69,7 @@ const File = ({ region, bucket, prefix, description }) => {
       color: "blue",
       htmlText: (
         <video>
-          <source src={url} type={`video/${fileExtension}`} />
+          <source src={accessUrl} type={`video/${fileExtension}`} />
         </video>
       ),
     };
@@ -144,7 +142,7 @@ const File = ({ region, bucket, prefix, description }) => {
   return (
     <a
       className={classes.container}
-      href={url}
+      href={accessUrl}
       target="_blank"
       rel="noreferrer"
     >
