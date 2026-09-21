@@ -4,12 +4,10 @@ import PaginationContext from "../../../store/pagination-context";
 import ChevronButton from "../../ui/ChevronButton";
 import ObjectsPerPage from "./ObjectsPerPage";
 
-const ViewingPageXofY = ({ min, max, total }) => {
+const ViewingPageXofY = ({ min, max }) => {
   return (
     <div>
-      <p>
-        Viewing {min}-{max} of {total}
-      </p>
+      <p>Viewing {min}-{max}</p>
     </div>
   );
 };
@@ -38,14 +36,18 @@ const PageControls = ({
 
 const Pagination = ({ onPreviousPageClick, onNextPageClick }) => {
   const paginationCtx = useContext(PaginationContext);
+  const hasVisibleRange =
+    paginationCtx.maxPageKey >= paginationCtx.minPageKey;
+
   return (
     <div className={classes.container}>
       <ObjectsPerPage />
-      <ViewingPageXofY
-        min={paginationCtx.minPageKey}
-        max={paginationCtx.maxPageKey}
-        total={paginationCtx.totalKeyCount}
-      />
+      {hasVisibleRange && (
+        <ViewingPageXofY
+          min={paginationCtx.minPageKey}
+          max={paginationCtx.maxPageKey}
+        />
+      )}
       <PageControls
         onPreviousPageClick={onPreviousPageClick}
         onNextPageClick={onNextPageClick}
