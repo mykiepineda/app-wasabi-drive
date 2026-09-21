@@ -8,7 +8,9 @@ const PaginationContext = React.createContext({
   minPageKey: 1,
   maxPageKey: 0,
   pageHistoryIndex: 0,
-  pageHistory: [],
+  pageHistory: [null],
+  reachedStart: true,
+  reachedEnd: true,
   isNotEmpty: false,
 });
 

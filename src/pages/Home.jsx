@@ -75,7 +75,7 @@ const Home = () => {
         pageHistoryIndex: 0,
         pageHistory: [null],
         reachedStart: true,
-        reachedEnd: false,
+        reachedEnd: true,
       }));
       setTurnPage((prevState) => ({
         switch: !prevState.switch,
@@ -87,7 +87,9 @@ const Home = () => {
     minPageKey: 1,
     maxPageKey: 0,
     pageHistoryIndex: 0,
-    pageHistory: [],
+    pageHistory: [null],
+    reachedStart: true,
+    reachedEnd: true,
     isNotEmpty: false,
   };
   const [paginationContext, setPaginationContext] = useState(
@@ -128,6 +130,7 @@ const Home = () => {
         maxPageKey: buckets.length,
         reachedStart: true,
         reachedEnd: true,
+        nextContinuationToken: null,
         pageHistory: [null],
         pageHistoryIndex: 0,
         isNotEmpty: buckets.length > 0,

@@ -60,6 +60,7 @@ jest.mock("../components/main/Contents", () => ({
 });
 
 const account = { username: "user@example.com" };
+const regionResponse = { region: "us-east-1" };
 
 const objectPage = (key, nextContinuationToken, isTruncated = true) => ({
   Contents: [{ Key: key, AccessUrl: `https://objects.example.invalid/${key}` }],
@@ -88,9 +89,11 @@ test("browses without TotalKeyCount and uses opaque cursor history", async () =>
   const secondToken = "second-token";
   authenticatedFetch
     .mockResolvedValueOnce({ json: async () => ({ Buckets: [{ Name: "bucket" }] }) })
-    .mockResolvedValueOnce({ json: async () => ({ region: "us-east-1" }) })
+    .mockResolvedValueOnce({ json: async () => regionResponse })
     .mockResolvedValueOnce({ json: async () => objectPage("page-1", firstToken) })
+    .mockResolvedValueOnce({ json: async () => regionResponse })
     .mockResolvedValueOnce({ json: async () => objectPage("page-2", secondToken) })
+    .mockResolvedValueOnce({ json: async () => regionResponse })
     .mockResolvedValueOnce({ json: async () => objectPage("page-1", firstToken) });
 
   await openBucket("page-1");
@@ -100,24 +103,26 @@ test("browses without TotalKeyCount and uses opaque cursor history", async () =>
   );
 
   fireEvent.click(screen.getByRole("button", { name: "next" }));
-  await waitFor(() => expect(authenticatedFetch).toHaveBeenCalledTimes(4));
-  expect(new URL(authenticatedFetch.mock.calls[3][2]).searchParams.get("ContinuationToken")).toBe(
-    firstToken
-  );
-
-  fireEvent.click(screen.getByRole("button", { name: "previous" }));
   await waitFor(() => expect(authenticatedFetch).toHaveBeenCalledTimes(5));
   expect(new URL(authenticatedFetch.mock.calls[4][2]).searchParams.get("ContinuationToken")).toBe(
+    firstToken
+  );
+  expect(await screen.findByText("page-2")).toBeInTheDocument();
+
+  fireEvent.click(screen.getByRole("button", { name: "previous" }));
+  await waitFor(() => expect(authenticatedFetch).toHaveBeenCalledTimes(7));
+  expect(new URL(authenticatedFetch.mock.calls[6][2]).searchParams.get("ContinuationToken")).toBe(
     null
   );
+  expect(await screen.findByText("page-1")).toBeInTheDocument();
   expect(screen.getByRole("button", { name: "previous" })).toBeDisabled();
 });
 
 test("uses safe prefix paths and resets cursor history when page size changes", async () => {
-  const prefix = "folder name/#?.";
+  const prefix = "folder name/#?./";
   authenticatedFetch
     .mockResolvedValueOnce({ json: async () => ({ Buckets: [{ Name: "bucket" }] }) })
-    .mockResolvedValueOnce({ json: async () => ({ region: "us-east-1" }) })
+    .mockResolvedValueOnce({ json: async () => regionResponse })
     .mockResolvedValueOnce({
       json: async () => ({
         CommonPrefixes: [{ Prefix: prefix }],
@@ -126,15 +131,16 @@ test("uses safe prefix paths and resets cursor history when page size changes", 
         IsTruncated: false,
       }),
     })
-    .mockResolvedValueOnce({ json: async () => objectPage("inside-folder", null, false) })
-    .mockResolvedValueOnce({ json: async () => objectPage("page-size-reset", null, false) });
+    .mockResolvedValueOnce({ json: async () => objectPage(`${prefix}inside-folder`, null, false) })
+    .mockResolvedValueOnce({ json: async () => objectPage(`${prefix}page-size-reset`, null, false) });
 
-  await openBucket("folder name/#?");
-  fireEvent.click(screen.getByRole("button", { name: "folder name/#?" }));
+  await openBucket("folder name/#?.");
+  fireEvent.click(screen.getByRole("button", { name: "folder name/#?." }));
   await waitFor(() => expect(authenticatedFetch).toHaveBeenCalledTimes(4));
 
   const prefixUrl = new URL(authenticatedFetch.mock.calls[3][2]);
-  expect(prefixUrl.pathname).toContain("folder%20name/%23%3F.");
+  expect(prefixUrl.pathname).toContain("folder%20name/%23%3F./");
+  expect(prefixUrl.searchParams.has("ContinuationToken")).toBe(false);
 
   fireEvent.change(screen.getByRole("combobox"), {
     target: { value: "25" },
@@ -143,12 +149,47 @@ test("uses safe prefix paths and resets cursor history when page size changes", 
   const resetUrl = new URL(authenticatedFetch.mock.calls[4][2]);
   expect(resetUrl.searchParams.get("MaxKeys")).toBe("25");
   expect(resetUrl.searchParams.has("ContinuationToken")).toBe(false);
+  expect(screen.getByRole("combobox")).toHaveValue("25");
+});
+
+test("entering a folder resets previously accumulated cursor history", async () => {
+  const bucketToken = "bucket-next-token";
+  authenticatedFetch
+    .mockResolvedValueOnce({ json: async () => ({ Buckets: [{ Name: "bucket" }] }) })
+    .mockResolvedValueOnce({ json: async () => regionResponse })
+    .mockResolvedValueOnce({ json: async () => objectPage("page-1", bucketToken) })
+    .mockResolvedValueOnce({ json: async () => regionResponse })
+    .mockResolvedValueOnce({
+      json: async () => ({
+        CommonPrefixes: [{ Prefix: "folder/" }],
+        Contents: [],
+        KeyCount: 1,
+        IsTruncated: false,
+      }),
+    })
+    .mockResolvedValueOnce({ json: async () => objectPage("folder/inside-folder", null, false) });
+
+  await openBucket("page-1");
+
+  fireEvent.click(screen.getByRole("button", { name: "next" }));
+  await waitFor(() => expect(screen.getByRole("button", { name: "folder" })).toBeInTheDocument());
+  expect(new URL(authenticatedFetch.mock.calls[4][2]).searchParams.get("ContinuationToken")).toBe(
+    bucketToken
+  );
+
+  fireEvent.click(screen.getByRole("button", { name: "folder" }));
+  await waitFor(() => expect(screen.getByText("inside-folder")).toBeInTheDocument());
+
+  const folderUrl = new URL(authenticatedFetch.mock.calls[5][2]);
+  expect(folderUrl.pathname).toContain("/objects/folder/");
+  expect(folderUrl.searchParams.has("ContinuationToken")).toBe(false);
+  expect(screen.getByRole("button", { name: "previous" })).toBeDisabled();
 });
 
 test("disables Next when the backend reports the final page", async () => {
   authenticatedFetch
     .mockResolvedValueOnce({ json: async () => ({ Buckets: [{ Name: "bucket" }] }) })
-    .mockResolvedValueOnce({ json: async () => ({ region: "us-east-1" }) })
+    .mockResolvedValueOnce({ json: async () => regionResponse })
     .mockResolvedValueOnce({ json: async () => objectPage("last-page", null, false) });
 
   await openBucket("last-page");
