@@ -15,6 +15,12 @@ import {
 const TURN_PAGE_FORWARD = "forward";
 const TURN_PAGE_BACKWARD = "backward";
 
+const encodePrefix = (prefix) =>
+  prefix
+    .split("/")
+    .map((component) => encodeURIComponent(component))
+    .join("/");
+
 const breadcrumbsReducer = (state, action) => {
   let idx = -1;
   for (let i = 0; i < state.length; i++) {
@@ -59,7 +65,18 @@ const Home = () => {
   });
   const initialPaginationContext = {
     maxKeys: 10,
-    onMaxKeysChange: () => {
+    onMaxKeysChange: (maxKeys) => {
+      setPaginationContext((prevState) => ({
+        ...prevState,
+        maxKeys,
+        nextContinuationToken: null,
+        minPageKey: 1,
+        maxPageKey: 0,
+        pageHistoryIndex: 0,
+        pageHistory: [null],
+        reachedStart: true,
+        reachedEnd: false,
+      }));
       setTurnPage((prevState) => ({
         switch: !prevState.switch,
         direction: null,
@@ -67,7 +84,6 @@ const Home = () => {
     },
     nextContinuationToken: null,
     keyCount: 0,
-    totalKeyCount: 0,
     minPageKey: 1,
     maxPageKey: 0,
     pageHistoryIndex: 0,
@@ -108,12 +124,12 @@ const Home = () => {
       setPaginationContext((prevState) => ({
         ...prevState,
         keyCount: buckets.length,
-        totalKeyCount: buckets.length,
         minPageKey: 1,
         maxPageKey: buckets.length,
         reachedStart: true,
         reachedEnd: true,
-        pageHistory: ["/"],
+        pageHistory: [null],
+        pageHistoryIndex: 0,
         isNotEmpty: buckets.length > 0,
       }));
 
@@ -147,18 +163,16 @@ const Home = () => {
       const { bucket, prefix } = navigation;
       const {
         maxKeys,
-        nextContinuationToken,
-        totalKeyCount,
-        keyCount,
         pageHistoryIndex,
         pageHistory,
       } = paginationContext;
 
-      let path = `${process.env.REACT_APP_API_URL}/buckets/${bucket}/objects/`;
+      const path = `${process.env.REACT_APP_API_URL}/buckets/${encodeURIComponent(
+        bucket
+      )}/objects/`;
       let breadcrumb = null;
 
       if (prefix) {
-        path = `${path}${prefix}`;
         breadcrumb = {
           target: prefix,
           onClick: objectClickHandler,
@@ -175,28 +189,16 @@ const Home = () => {
         };
       }
 
-      // Pagination Query Parameters
-      path = `${path}?MaxKeys=${maxKeys}`;
-      let continuationToken;
-      switch (turnPage.direction) {
-        case TURN_PAGE_FORWARD:
-          if (Math.ceil(totalKeyCount / keyCount) === pageHistory.length) {
-            continuationToken = pageHistory[pageHistoryIndex];
-          } else {
-            continuationToken = nextContinuationToken;
-          }
-          break;
-        case TURN_PAGE_BACKWARD:
-          continuationToken = pageHistory[pageHistoryIndex];
-          break;
-        default:
-          break;
-      }
+      const url = new URL(
+        `${path}${prefix ? encodePrefix(prefix) : ""}`
+      );
+      url.searchParams.set("MaxKeys", String(maxKeys));
+      const continuationToken = pageHistory[pageHistoryIndex];
       if (continuationToken) {
-        path = `${path}&ContinuationToken=${continuationToken}`;
+        url.searchParams.set("ContinuationToken", continuationToken);
       }
 
-      const response = await authenticatedFetch(instance, account, path, {
+      const response = await authenticatedFetch(instance, account, url.toString(), {
         method: "GET",
       });
       if (!response) {
@@ -231,41 +233,22 @@ const Home = () => {
 
       setPaginationContext((prevState) => {
         let minPageKey = 1;
-        let maxPageKey = body.KeyCount;
-        let pageHistory = prevState.pageHistory;
+        const keyCount = body.KeyCount ?? folders.length + files.length;
+        const maxPageKey =
+          pageHistoryIndex * maxKeys + keyCount;
 
         if (pageHistoryIndex > 0) {
-          minPageKey = pageHistoryIndex * body.MaxKeys + 1;
-          maxPageKey = minPageKey + body.KeyCount - 1;
-        }
-
-        if (
-          (turnPage.direction === TURN_PAGE_FORWARD &&
-            Math.ceil(body.TotalKeyCount / body.KeyCount) !==
-              prevState.pageHistory.length) ||
-          prevState.pageHistory.length === 0
-        ) {
-          const push = !prevState.pageHistory.some(
-            (ph) => ph === body.ContinuationToken
-          );
-          if (push) {
-            pageHistory = [
-              ...prevState.pageHistory,
-              body.ContinuationToken ? body.ContinuationToken : "/",
-            ];
-          }
+          minPageKey = pageHistoryIndex * maxKeys + 1;
         }
 
         const newContext = {
           ...prevState,
           reachedStart: pageHistoryIndex === 0,
-          reachedEnd: maxPageKey === body.TotalKeyCount,
-          keyCount: body.KeyCount,
-          totalKeyCount: body.TotalKeyCount,
+          reachedEnd: !body.IsTruncated || !body.NextContinuationToken,
+          keyCount,
           nextContinuationToken: body.NextContinuationToken,
           minPageKey,
           maxPageKey,
-          pageHistory,
           isNotEmpty: folders.length > 0 || files.length > 0,
         };
         return newContext;
@@ -326,6 +309,10 @@ const Home = () => {
 
   const bucketClickHandler = (event) => {
     event.stopPropagation();
+    setPaginationContext((prevState) => ({
+      ...initialPaginationContext,
+      maxKeys: prevState.maxKeys,
+    }));
     const bucket = event.currentTarget.innerText;
     setNavigation({
       isHomePage: false,
@@ -338,7 +325,7 @@ const Home = () => {
     event.stopPropagation();
     setPaginationContext((prevState) => ({
       ...prevState,
-      pageHistoryIndex: prevState.pageHistoryIndex - 1,
+      pageHistoryIndex: Math.max(0, prevState.pageHistoryIndex - 1),
     }));
     // Flick switch to trigger state change
     setTurnPage((prevState) => ({
@@ -349,10 +336,19 @@ const Home = () => {
 
   const nextPageClickHandler = (event) => {
     event.stopPropagation();
-    setPaginationContext((prevState) => ({
-      ...prevState,
-      pageHistoryIndex: prevState.pageHistoryIndex + 1,
-    }));
+    setPaginationContext((prevState) => {
+      if (prevState.reachedEnd || !prevState.nextContinuationToken) {
+        return prevState;
+      }
+      return {
+        ...prevState,
+        pageHistoryIndex: prevState.pageHistoryIndex + 1,
+        pageHistory: [
+          ...prevState.pageHistory.slice(0, prevState.pageHistoryIndex + 1),
+          prevState.nextContinuationToken,
+        ],
+      };
+    });
     // Flick switch to trigger state change
     setTurnPage((prevState) => ({
       switch: !prevState.switch,

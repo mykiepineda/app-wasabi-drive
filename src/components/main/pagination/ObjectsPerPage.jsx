@@ -6,8 +6,7 @@ const ObjectsPerPage = () => {
   const paginationCtx = useContext(PaginationContext);
 
   const onSelectHandler = (event) => {
-    paginationCtx.maxKeys = parseInt(event.target.value);
-    paginationCtx.onMaxKeysChange();
+    paginationCtx.onMaxKeysChange(parseInt(event.target.value, 10));
   };
 
   return (

@@ -5,7 +5,6 @@ const PaginationContext = React.createContext({
   onMaxKeysChange: () => {},
   nextContinuationToken: null,
   keyCount: 0,
-  totalKeyCount: 0,
   minPageKey: 1,
   maxPageKey: 0,
   pageHistoryIndex: 0,
