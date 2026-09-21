@@ -36,13 +36,18 @@ const PageControls = ({
 
 const Pagination = ({ onPreviousPageClick, onNextPageClick }) => {
   const paginationCtx = useContext(PaginationContext);
+  const hasVisibleRange =
+    paginationCtx.maxPageKey >= paginationCtx.minPageKey;
+
   return (
     <div className={classes.container}>
       <ObjectsPerPage />
-      <ViewingPageXofY
-        min={paginationCtx.minPageKey}
-        max={paginationCtx.maxPageKey}
-      />
+      {hasVisibleRange && (
+        <ViewingPageXofY
+          min={paginationCtx.minPageKey}
+          max={paginationCtx.maxPageKey}
+        />
+      )}
       <PageControls
         onPreviousPageClick={onPreviousPageClick}
         onNextPageClick={onNextPageClick}
