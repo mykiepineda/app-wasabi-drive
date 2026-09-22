@@ -1,5 +1,6 @@
 {
   "projects": {
-    "default": "wasabi-drive-e73cd"
+    "default": "wasabi-drive-e73cd",
+    "prd": "wasabi-drive-e73cd"
   }
 }
