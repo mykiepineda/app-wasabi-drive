@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useMsal } from "@azure/msal-react";
 import classes from "./Home.module.css";
 import BucketContext from "../store/bucket-context";
@@ -14,6 +14,11 @@ import {
 
 const TURN_PAGE_FORWARD = "forward";
 const TURN_PAGE_BACKWARD = "backward";
+const INITIAL_NAVIGATION_STATE = {
+  isHomePage: true,
+  bucket: null,
+  prefix: null,
+};
 
 const encodePrefix = (prefix) =>
   prefix
@@ -53,17 +58,16 @@ const Home = () => {
     folders: [],
     files: [],
   });
-  const initialNavigationState = {
-    isHomePage: true,
-    bucket: null,
-    prefix: null,
-  };
-  const [navigation, setNavigation] = useState(initialNavigationState);
+  const [navigation, setNavigation] = useState(INITIAL_NAVIGATION_STATE);
   const [bucketContext, setBucketContext] = useState({
     name: null,
     region: null,
   });
-  const initialPaginationContext = {
+  const [turnPage, setTurnPage] = useState({
+    switch: false,
+    direction: null,
+  });
+  const [paginationContext, setPaginationContext] = useState({
     maxKeys: 10,
     onMaxKeysChange: (maxKeys) => {
       setPaginationContext((prevState) => ({
@@ -91,14 +95,58 @@ const Home = () => {
     reachedStart: true,
     reachedEnd: true,
     isNotEmpty: false,
-  };
-  const [paginationContext, setPaginationContext] = useState(
-    initialPaginationContext
-  );
-  const [turnPage, setTurnPage] = useState({
-    switch: false,
-    direction: null,
   });
+
+  const resetPagination = useCallback(() => {
+    setPaginationContext((prevState) => ({
+      ...prevState,
+      nextContinuationToken: null,
+      keyCount: 0,
+      minPageKey: 1,
+      maxPageKey: 0,
+      pageHistoryIndex: 0,
+      pageHistory: [null],
+      reachedStart: true,
+      reachedEnd: true,
+      isNotEmpty: false,
+    }));
+  }, []);
+
+  const objectClickHandler = useCallback((event) => {
+    event.stopPropagation();
+    resetPagination();
+    setTurnPage((prevState) => ({
+      switch: !prevState.switch,
+      direction: null,
+    }));
+    const prefix = event.currentTarget.dataset.prefix;
+    setNavigation((prevState) => {
+      return {
+        isHomePage: false,
+        bucket: prevState.bucket,
+        prefix,
+      };
+    });
+  }, [resetPagination]);
+
+  const bucketClickHandler = useCallback((event) => {
+    event.stopPropagation();
+    resetPagination();
+    const bucket = event.currentTarget.innerText;
+    setNavigation({
+      isHomePage: false,
+      bucket,
+      prefix: null,
+    });
+  }, [resetPagination]);
+
+  const maxKeys = navigation.isHomePage ? null : paginationContext.maxKeys;
+  const pageHistoryIndex = navigation.isHomePage
+    ? null
+    : paginationContext.pageHistoryIndex;
+  const pageHistory = navigation.isHomePage
+    ? null
+    : paginationContext.pageHistory;
 
   useEffect(() => {
     const fetchBuckets = async () => {
@@ -118,7 +166,7 @@ const Home = () => {
       const initialBreadcrumbsState = [
         {
           target: "Buckets",
-          onClick: () => setNavigation(initialNavigationState),
+          onClick: () => setNavigation(INITIAL_NAVIGATION_STATE),
           level: 1,
         },
       ];
@@ -164,12 +212,6 @@ const Home = () => {
 
     const fetchObjects = async () => {
       const { bucket, prefix } = navigation;
-      const {
-        maxKeys,
-        pageHistoryIndex,
-        pageHistory,
-      } = paginationContext;
-
       const path = `${process.env.REACT_APP_API_URL}/buckets/${encodeURIComponent(
         bucket
       )}/objects/`;
@@ -289,40 +331,17 @@ const Home = () => {
         );
       })
       .finally(() => setIsLoading(false));
-  }, [account, instance, navigation, turnPage]);
-
-  const objectClickHandler = (event) => {
-    event.stopPropagation();
-    setPaginationContext((prevState) => {
-      return { ...initialPaginationContext, maxKeys: prevState.maxKeys };
-    });
-    setTurnPage((prevState) => ({
-      switch: !prevState.switch,
-      direction: null,
-    }));
-    const prefix = event.currentTarget.dataset.prefix;
-    setNavigation((prevState) => {
-      return {
-        isHomePage: false,
-        bucket: prevState.bucket,
-        prefix,
-      };
-    });
-  };
-
-  const bucketClickHandler = (event) => {
-    event.stopPropagation();
-    setPaginationContext((prevState) => ({
-      ...initialPaginationContext,
-      maxKeys: prevState.maxKeys,
-    }));
-    const bucket = event.currentTarget.innerText;
-    setNavigation({
-      isHomePage: false,
-      bucket,
-      prefix: null,
-    });
-  };
+  }, [
+    account,
+    bucketClickHandler,
+    instance,
+    navigation,
+    objectClickHandler,
+    maxKeys,
+    pageHistoryIndex,
+    pageHistory,
+    turnPage,
+  ]);
 
   const previousPageClickHandler = (event) => {
     event.stopPropagation();

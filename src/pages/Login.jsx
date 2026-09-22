@@ -23,7 +23,7 @@ const ToastMessage = ({ message }) => {
 const Logo = () => {
   return (
     <div className={classes.brand}>
-      <img src={logo} />
+      <img src={logo} alt="Wasabi" />
       <h1>drive</h1>
     </div>
   );
