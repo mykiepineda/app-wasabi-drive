@@ -1,4 +1,4 @@
-import { Fragment, useContext } from "react";
+import { Fragment } from "react";
 import classes from "./Contents.module.css";
 import Buckets from "./Buckets";
 import Folders from "./Folders";
@@ -6,7 +6,6 @@ import Files from "./Files";
 import Empty from "./Empty";
 import SubHeader from "./SubHeader";
 import Pagination from "./pagination/Pagination";
-import PaginationContext from "../../store/pagination-context";
 
 const Wrapper = ({ children, onPreviousPageClick, onNextPageClick }) => {
   return (
@@ -30,8 +29,6 @@ const Contents = ({
   onNextPageClick,
   isHomePage,
 }) => {
-  const paginationCtx = useContext(PaginationContext);
-  const paginationStateFinal = paginationCtx.isNotEmpty;
   const displayBucketsContents = contents && contents.buckets.length > 0;
   const displayFolderContents = contents && contents.folders.length > 0;
   const displayFileContents = contents && contents.files.length > 0;
