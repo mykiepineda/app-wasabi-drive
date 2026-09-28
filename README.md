@@ -38,6 +38,25 @@ Deploy the test build with:
 npm run deploy:test
 ```
 
+### Automated test deployment
+
+Merging a reviewed pull request into protected `master` automatically deploys
+the test frontend. The GitHub Actions workflow
+[`.github/workflows/frontend-test-deploy.yml`](./.github/workflows/frontend-test-deploy.yml)
+runs on push to `master` and:
+
+- builds the app using the four `REACT_APP_*` values configured as variables
+  on the GitHub `test` Environment;
+- authenticates to Google Cloud using GitHub OIDC and Google Workload Identity
+  Federation, impersonating a dedicated test deploy service account with no
+  downloaded JSON key and no service-account secret stored in GitHub;
+- deploys Hosting only, to the `test` Firebase project alias, using the
+  repository-local Firebase CLI.
+
+`npm run deploy:test` remains available as a manual fallback for local
+deployment. Production deployment remains separate, manual, and is not
+triggered by this workflow.
+
 ## Production deployment
 
 Configure the production `REACT_APP_*` values before building and deploy with
