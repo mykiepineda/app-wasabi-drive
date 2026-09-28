@@ -28,12 +28,15 @@ Completed work:
 - 6F — stable frontend `test` Firebase Hosting environment;
 - 6G — automated frontend `test` deployment using GitHub OIDC and Google Workload Identity Federation;
 - 6H-A — controlled backend production promotion using an exact tested `master` SHA;
-- 6H-A.1 — backend `/health` plus automated deployed-API smoke verification in `test` and `prd`;
-- 6H-B — controlled frontend production promotion using an exact tested `master` SHA.
+- 6H-A.1 — backend `/health` plus automated deployed-API smoke verification in `test` and `prd`.
 
-Phase 6 is complete. Do not proceed to later phases or unrelated cleanup without direction from the technical owner.
+The active task is:
 
-Do not make backend changes as part of the completed Task 6H-B implementation.
+**Task 6H-B — Controlled frontend production promotion**
+
+Do not make backend changes.
+
+Do not continue into unrelated Phase 6 cleanup or a later modernization phase.
 
 ## Current frontend state
 
