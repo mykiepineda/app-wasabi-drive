@@ -1,0 +1,111 @@
+name: Frontend Production Promotion
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_sha:
+        description: Full 40-character master commit SHA already validated in test
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: frontend-prd-deployment
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Promote frontend to production
+    if: github.ref == 'refs/heads/master'
+    runs-on: ubuntu-latest
+    environment:
+      name: prd
+      url: https://wasabi-drive-e73cd.web.app/
+    env:
+      REACT_APP_API_URL: ${{ vars.REACT_APP_API_URL }}
+      REACT_APP_ENTRA_TENANT_ID: ${{ vars.REACT_APP_ENTRA_TENANT_ID }}
+      REACT_APP_ENTRA_CLIENT_ID: ${{ vars.REACT_APP_ENTRA_CLIENT_ID }}
+      REACT_APP_ENTRA_API_SCOPE: ${{ vars.REACT_APP_ENTRA_API_SCOPE }}
+    steps:
+      - name: Checkout master history
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Validate and checkout requested source SHA
+        env:
+          SOURCE_SHA: ${{ inputs.source_sha }}
+        run: |
+          if [[ ! "$SOURCE_SHA" =~ ^[0-9a-fA-F]{40}$ ]]; then
+            echo "source_sha must be a full 40-character hexadecimal commit SHA."
+            exit 1
+          fi
+
+          source_sha="${SOURCE_SHA,,}"
+
+          if ! git cat-file -e "${source_sha}^{commit}" 2>/dev/null; then
+            echo "source_sha does not resolve to a Git commit."
+            exit 1
+          fi
+
+          resolved_sha="$(git rev-parse --verify "${source_sha}^{commit}")"
+          if [[ "$resolved_sha" != "$source_sha" ]]; then
+            echo "source_sha must identify the commit directly, not another Git object."
+            exit 1
+          fi
+
+          if ! git merge-base --is-ancestor "$source_sha" origin/master; then
+            echo "source_sha is not in origin/master history."
+            exit 1
+          fi
+
+          git checkout --detach "$source_sha"
+          checked_out_sha="$(git rev-parse HEAD)"
+          if [[ "$checked_out_sha" != "$source_sha" ]]; then
+            echo "Checked-out SHA does not match source_sha."
+            exit 1
+          fi
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "24"
+          package-manager-cache: false
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run tests
+        run: npm run test:ci
+
+      - name: Build production frontend
+        run: npm run build
+
+      - name: Record deployment context
+        env:
+          SOURCE_SHA: ${{ inputs.source_sha }}
+        run: |
+          echo "Requested source SHA: $SOURCE_SHA"
+          echo "Verified checked-out SHA: $(git rev-parse HEAD)"
+          echo "Environment: prd"
+          echo "Firebase project: wasabi-drive-e73cd"
+          echo "Workflow run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3.0.0
+        with:
+          project_id: wasabi-drive-e73cd
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_DEPLOY_SERVICE_ACCOUNT }}
+          create_credentials_file: true
+          export_environment_variables: true
+
+      - name: Deploy to Firebase Hosting (production)
+        env:
+          SOURCE_SHA: ${{ inputs.source_sha }}
+          RUN_ID: ${{ github.run_id }}
+        run: npm exec -- firebase deploy --only hosting --project wasabi-drive-e73cd --non-interactive -m "sha:${SOURCE_SHA} run:${RUN_ID}"
