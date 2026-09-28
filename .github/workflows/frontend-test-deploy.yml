@@ -1,0 +1,66 @@
+name: Frontend Test Deploy
+
+on:
+  push:
+    branches:
+      - master
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: frontend-test-deployment
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Build and deploy test
+    runs-on: ubuntu-latest
+    environment:
+      name: test
+      url: https://wasabi-drive-test.web.app/
+    env:
+      REACT_APP_API_URL: ${{ vars.REACT_APP_API_URL }}
+      REACT_APP_ENTRA_TENANT_ID: ${{ vars.REACT_APP_ENTRA_TENANT_ID }}
+      REACT_APP_ENTRA_CLIENT_ID: ${{ vars.REACT_APP_ENTRA_CLIENT_ID }}
+      REACT_APP_ENTRA_API_SCOPE: ${{ vars.REACT_APP_ENTRA_API_SCOPE }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "24"
+          package-manager-cache: false
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run tests
+        run: npm run test:ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Record deployment context
+        run: |
+          echo "Git SHA: ${{ github.sha }}"
+          echo "Environment: test"
+          echo "Firebase project: wasabi-drive-test"
+          echo "Workflow run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3.0.0
+        with:
+          project_id: wasabi-drive-test
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_DEPLOY_SERVICE_ACCOUNT }}
+          create_credentials_file: true
+          export_environment_variables: true
+
+      - name: Deploy to Firebase Hosting (test)
+        run: npm exec -- firebase deploy --only hosting --project test --non-interactive -m "sha:${{ github.sha }} run:${{ github.run_id }}"
