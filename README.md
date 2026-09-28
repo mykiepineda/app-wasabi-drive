@@ -40,31 +40,54 @@ npm run deploy:test
 
 ### Automated test deployment
 
-Merging a reviewed pull request into protected `master` automatically deploys
-the test frontend. The GitHub Actions workflow
+Pull requests to `master` run frontend CI. Merging a reviewed pull request into
+protected `master` automatically deploys the test frontend to
+https://wasabi-drive-test.web.app/. The GitHub Actions workflow
 [`.github/workflows/frontend-test-deploy.yml`](./.github/workflows/frontend-test-deploy.yml)
 runs on push to `master` and:
 
 - builds the app using the four `REACT_APP_*` values configured as variables
   on the GitHub `test` Environment;
 - authenticates to Google Cloud using GitHub OIDC and Google Workload Identity
-  Federation, impersonating a dedicated test deploy service account with no
-  downloaded JSON key and no service-account secret stored in GitHub;
+  Federation to obtain short-lived credentials for a dedicated test deploy
+  service account, with no downloaded JSON key or service-account secret
+  stored in GitHub;
 - deploys Hosting only, to the `test` Firebase project alias, using the
   repository-local Firebase CLI.
 
-`npm run deploy:test` remains available as a manual fallback for local
-deployment. Production deployment remains separate, manual, and is not
-triggered by this workflow.
+After validating the deployed test frontend, record the exact full 40-character
+`master` commit SHA that was tested. Production promotion is a separate manual
+workflow and never runs automatically on push or merge.
 
 ## Production deployment
 
-Configure the production `REACT_APP_*` values before building and deploy with
-the existing, separate production command:
+The `Frontend Production Promotion` workflow
+([`.github/workflows/frontend-prd-deploy.yml`](./.github/workflows/frontend-prd-deploy.yml))
+can be dispatched from `master` after the tested source SHA is validated in
+test. It requires that full 40-character SHA, verifies it is a commit in
+`master` history, checks out that exact source, reruns frontend tests, and
+builds with the production `REACT_APP_*` values from GitHub Environment `prd`.
 
-```bash
-npm run deploy:prd
-```
+Test and production are separate builds from the same source SHA because
+Create React App embeds `REACT_APP_*` values into static JavaScript at build
+time. The workflow builds before authenticating to Google, then uses GitHub
+OIDC and Google Workload Identity Federation to obtain short-lived credentials
+for a dedicated production deploy service account. No service-account JSON key
+or `FIREBASE_TOKEN` is stored. It deploys Firebase Hosting only to project
+`wasabi-drive-e73cd` at
+https://wasabi-drive-e73cd.web.app/. Validate the production site manually
+after deployment.
+
+`npm run deploy:test` and `npm run deploy:prd` remain manual local fallback
+commands.
+
+### Production rollback
+
+To roll back, manually dispatch the production promotion workflow with a
+known-good full `master` SHA. This is a source-SHA rollback: the workflow
+rebuilds that historical source using the current production build-time
+configuration. It does not restore a historical byte-identical build
+artifact.
 
 ## Screenshots
 
