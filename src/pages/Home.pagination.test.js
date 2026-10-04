@@ -1,7 +1,7 @@
 import React from "react";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { useMsal } from "@azure/msal-react";
-import Home from "./Home";
+import Home, { breadcrumbsReducer } from "./Home";
 import { authenticatedFetch } from "../auth/api-client";
 
 jest.mock("@azure/msal-react", () => ({
@@ -83,6 +83,129 @@ const openBucket = async (initialContent) => {
   fireEvent.click(await screen.findByRole("button", { name: "bucket" }));
   await waitFor(() => expect(screen.getByText(initialContent)).toBeInTheDocument());
 };
+
+const deferred = () => {
+  let resolve;
+  let reject;
+  const promise = new Promise((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+  return { promise, resolve, reject };
+};
+
+test("ignores a stale folder response after a newer navigation request starts", async () => {
+  const staleFolderResponse = deferred();
+  const newerFolderResponse = deferred();
+
+  authenticatedFetch.mockImplementation((instance, account, input) => {
+    const url = typeof input === "string" ? input : input.toString();
+    if (url.endsWith("/buckets")) {
+      return Promise.resolve({
+        json: async () => ({ Buckets: [{ Name: "bucket" }] }),
+      });
+    }
+    if (/\/buckets\/[^/]+\/region$/.test(url)) {
+      return Promise.resolve({ json: async () => regionResponse });
+    }
+    if (/\/buckets\/[^/]+\/objects\//.test(url)) {
+      if (url.includes("folder-a")) {
+        return staleFolderResponse.promise;
+      }
+      if (url.includes("folder-b")) {
+        return newerFolderResponse.promise;
+      }
+      return Promise.resolve({
+        json: async () => ({
+          CommonPrefixes: [{ Prefix: "folder-a/" }, { Prefix: "folder-b/" }],
+          Contents: [],
+          KeyCount: 2,
+          IsTruncated: false,
+        }),
+      });
+    }
+
+    return Promise.reject(new Error(`Unexpected request ${url}`));
+  });
+
+  render(<Home />);
+  fireEvent.click(await screen.findByRole("button", { name: "bucket" }));
+  await waitFor(() => expect(screen.getByText("folder-a")).toBeInTheDocument());
+
+  fireEvent.click(screen.getByRole("button", { name: "folder-a" }));
+  await waitFor(() => expect(authenticatedFetch).toHaveBeenCalledWith(
+    expect.any(Object),
+    account,
+    expect.stringContaining("/objects/folder-a/"),
+    expect.objectContaining({ method: "GET" })
+  ));
+
+  fireEvent.click(screen.getByRole("button", { name: "folder-b" }));
+  await waitFor(() => expect(authenticatedFetch).toHaveBeenCalledWith(
+    expect.any(Object),
+    account,
+    expect.stringContaining("/objects/folder-b/"),
+    expect.objectContaining({ method: "GET" })
+  ));
+
+  await act(async () => {
+    newerFolderResponse.resolve({
+      json: async () => ({
+        Contents: [{ Key: "folder-b/newer.txt", AccessUrl: "https://objects.example.invalid/folder-b/newer.txt" }],
+        CommonPrefixes: [],
+        KeyCount: 1,
+        IsTruncated: false,
+      }),
+    });
+  });
+
+  await waitFor(() => expect(screen.getByText("newer.txt")).toBeInTheDocument());
+
+  await act(async () => {
+    staleFolderResponse.resolve({
+      json: async () => ({
+        Contents: [{ Key: "folder-a/stale.txt", AccessUrl: "https://objects.example.invalid/folder-a/stale.txt" }],
+        CommonPrefixes: [],
+        KeyCount: 1,
+        IsTruncated: false,
+      }),
+    });
+  });
+
+  await waitFor(() => expect(screen.queryByText("stale.txt")).not.toBeInTheDocument());
+  expect(screen.getByText("newer.txt")).toBeInTheDocument();
+});
+
+test("does not show a service error when an intentional request aborts", async () => {
+  const abortError = new Error("The operation was aborted");
+  abortError.name = "AbortError";
+  authenticatedFetch.mockImplementation((instance, account, input) => {
+    const url = typeof input === "string" ? input : input.toString();
+    if (url.endsWith("/buckets")) {
+      return Promise.reject(abortError);
+    }
+    return Promise.reject(new Error(`Unexpected request ${url}`));
+  });
+
+  render(<Home />);
+
+  await waitFor(() => expect(authenticatedFetch).toHaveBeenCalledTimes(1));
+  await waitFor(() => expect(screen.queryByRole("alert")).not.toBeInTheDocument());
+});
+
+test("breadcrumbsReducer keeps state immutable when reusing an existing breadcrumb", () => {
+  const state = [
+    { target: "Buckets", level: 1 },
+    { target: "bucket", level: 2 },
+    { target: "folder/", level: 3 },
+  ];
+
+  const nextState = breadcrumbsReducer(state, { target: "bucket" });
+
+  expect(nextState).toEqual([{ target: "Buckets", level: 1 }, { target: "bucket", level: 2 }]);
+  expect(nextState).not.toBe(state);
+  expect(state).toHaveLength(3);
+});
 
 test("browses without TotalKeyCount and uses opaque cursor history", async () => {
   const firstToken = "opaque/?&# token";

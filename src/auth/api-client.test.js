@@ -103,6 +103,22 @@ test.each([
   global.fetch.mockRestore();
 });
 
+test("rethrows AbortError instead of converting it to a service error", async () => {
+  const abortError = new Error("The operation was aborted");
+  abortError.name = "AbortError";
+  jest.spyOn(global, "fetch").mockRejectedValue(abortError);
+  const instance = {
+    acquireTokenSilent: jest.fn().mockResolvedValue({
+      accessToken: "test-access-token",
+    }),
+  };
+
+  await expect(
+    authenticatedFetch(instance, { homeAccountId: "account-id" }, "/buckets")
+  ).rejects.toBe(abortError);
+  global.fetch.mockRestore();
+});
+
 test("converts rejected fetch into a service error", async () => {
   jest.spyOn(global, "fetch").mockRejectedValue(new TypeError("Failed to fetch"));
   const instance = {
