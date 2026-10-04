@@ -2,11 +2,11 @@
 
 ## Project role
 
-Wasabi Drive is an existing production application and an incremental modernization project.
+Wasabi Drive is an existing production application and an incremental modernization / cloud-engineering learning project.
 
 The developer is the technical owner and architectural decision-maker.
 
-Copilot is an implementation assistant. Make only the explicitly requested change, preserve working behavior, and do not independently redesign the frontend, authentication model, deployment model, Firebase architecture, Google Cloud identity model, backend integration, or release process.
+Copilot is an implementation assistant. Make only the explicitly requested change, preserve working behavior, and do not independently redesign the frontend, authentication model, backend contract, Firebase deployment model, or release process.
 
 Prefer focused, reviewable changes over broad cleanup.
 
@@ -14,94 +14,58 @@ Prefer focused, reviewable changes over broad cleanup.
 
 Current modernization phase:
 
-**Phase 6 — CI/CD and Deployment Safety**
+**Phase 7 — Production Reliability and Observability**
 
-CI/CD = Continuous Integration / Continuous Delivery.
+Backend Tasks 7A and 7B are complete and production-validated. Automated CloudWatch alarms from Task 7C are deliberately deferred because the current two-user application does not justify additional AWS cost/maintenance.
 
-Completed work:
+The active frontend task is:
 
-- 6A — backend pull-request CI;
-- 6B — frontend pull-request CI;
-- 6C — deployment command normalization;
-- 6D — automated backend `test` deployment using GitHub Actions, GitHub OIDC, AWS STS, and Serverless Framework;
-- 6E — backend test-stage verification;
-- 6F — stable frontend `test` Firebase Hosting environment;
-- 6G — automated frontend `test` deployment using GitHub OIDC and Google Workload Identity Federation;
-- 6H-A — controlled backend production promotion using an exact tested `master` SHA;
-- 6H-A.1 — backend `/health` plus automated deployed-API smoke verification in `test` and `prd`.
+**Task 7D — Frontend reliability cleanup**
 
-The active task is:
+Do not continue into Task 7E or another modernization phase unless explicitly instructed.
 
-**Task 6H-B — Controlled frontend production promotion**
-
-Do not make backend changes.
-
-Do not continue into unrelated Phase 6 cleanup or a later modernization phase.
-
-## Current frontend state
+## Authoritative frontend baseline
 
 Treat the latest `master` source as authoritative.
 
-The established frontend state includes:
+The reviewed frontend baseline for Task 7D is commit:
+
+`2935fadfc22b9c58b4e47dcafcc451b593fe588c`
+
+Before implementation, verify the actual working clone and report its starting SHA. If `master` has advanced, use the newer `master` source and preserve any newer approved behavior.
+
+## Stable architecture to preserve
+
+Frontend:
 
 - React 18;
 - Create React App / `react-scripts` 5;
 - JavaScript;
+- Firebase Hosting;
+- separate Firebase `test` and production projects;
 - Microsoft Authentication Library (MSAL);
 - Microsoft Entra authentication;
-- Firebase Hosting;
-- production Firebase project ID `wasabi-drive-e73cd`;
-- production Hosting URL `https://wasabi-drive-e73cd.web.app/`;
-- dedicated test Firebase project ID `wasabi-drive-test`;
-- stable test Hosting URL `https://wasabi-drive-test.web.app/`;
-- `.firebaserc` aliases:
-  - `default` -> `wasabi-drive-e73cd`;
-  - `prd` -> `wasabi-drive-e73cd`;
-  - `test` -> `wasabi-drive-test`;
-- repository-local `firebase-tools`;
-- local fallback scripts `deploy:test` and `deploy:prd`;
-- frontend PR CI on pull requests to `master`;
-- automated frontend test deployment on push to `master`.
+- OAuth 2.0 / OpenID Connect access-token flow;
+- bearer API access token;
+- cursor-based bucket/folder pagination;
+- backend-generated short-lived `AccessUrl` values for private Wasabi objects;
+- explicit `401`, `403`, service-error, and network-error handling.
 
-The completed test-deployment workflow is:
-
-`.github/workflows/frontend-test-deploy.yml`
-
-It already proves the approved Google authentication pattern:
-
-GitHub OIDC
--> Google Workload Identity Federation
--> dedicated test service account
--> short-lived credentials
--> Firebase Hosting.
-
-Reuse that pattern for production rather than inventing another deployment mechanism.
-
-## Current frontend architecture
-
-Preserve:
-
-- React 18;
-- Create React App;
-- `react-scripts` 5;
-- JavaScript;
-- MSAL;
-- Microsoft Entra;
-- Firebase Hosting;
-- separate Firebase projects for `test` and production;
-- frontend `REACT_APP_*` configuration embedded at build time.
+Preserve the existing backend contract and deployment architecture.
 
 Do not introduce:
 
+- Redux;
+- React Query / TanStack Query;
+- another state-management framework;
+- TypeScript;
+- Vite or another Create React App replacement;
+- React major-version upgrades;
 - Firebase Authentication;
 - Firestore;
 - Realtime Database;
 - Cloud Functions;
-- Firebase App Hosting;
-- another frontend hosting platform;
-- Vite;
-- TypeScript;
-- runtime configuration infrastructure.
+- another hosting platform.
 
 ## Security and identity invariants
 
@@ -110,8 +74,7 @@ Preserve:
 React SPA
 -> MSAL
 -> Microsoft Entra
--> OAuth 2.0 / OpenID Connect
--> access token
+-> OAuth 2.0 / OpenID Connect access token
 -> API Gateway
 -> Express backend authentication
 -> application authorization
@@ -121,8 +84,6 @@ MSAL = Microsoft Authentication Library.
 
 OIDC = OpenID Connect.
 
-WIF = Google Cloud Workload Identity Federation. It lets GitHub Actions exchange its GitHub OIDC identity for short-lived Google credentials without storing a long-lived Google service-account key.
-
 The backend remains the security authority.
 
 Frontend state is not authorization.
@@ -131,749 +92,243 @@ CORS is not authentication.
 
 Browser-visible frontend configuration is not secret.
 
-The following are public build-time configuration:
-
-- `REACT_APP_API_URL`;
-- `REACT_APP_ENTRA_TENANT_ID`;
-- `REACT_APP_ENTRA_CLIENT_ID`;
-- `REACT_APP_ENTRA_API_SCOPE`.
-
-Do not introduce:
+Never introduce:
 
 - a Microsoft Entra client secret into the SPA;
 - API keys as user authentication;
-- `FIREBASE_TOKEN`;
-- `firebase login:ci`;
-- Google service-account JSON keys;
-- long-lived Google credentials;
-- production Google credentials stored as GitHub secrets.
+- Wasabi credentials into the browser;
+- raw/public Wasabi object URLs;
+- client-side authorization as a substitute for backend enforcement.
 
-## Task 6H-B objective
+Do not log or expose bearer tokens or presigned URL query values.
 
-Add a controlled, manual frontend production promotion workflow.
+## Completed frontend behavior to preserve
 
-Target release flow:
+### Authentication and API access
 
-reviewed frontend change
--> PR CI
--> merge to protected `master`
--> automatic frontend `test` deployment
--> manual validation at `https://wasabi-drive-test.web.app/`
--> choose the exact tested full 40-character `master` SHA
--> manually dispatch production promotion
--> validate SHA is a commit and an ancestor of `origin/master`
--> checkout that exact SHA detached
--> Node.js 24
--> `npm ci`
--> `npm run test:ci`
--> build that exact source using production `REACT_APP_*` values
--> GitHub OIDC
--> production Google WIF
--> dedicated production deploy service account
--> Firebase Hosting production deployment
--> manual production validation.
+Preserve:
 
-Production must **never** deploy automatically on merge or push.
+- MSAL token acquisition;
+- bearer-token API calls;
+- safe handling of `401 Unauthorized`;
+- safe handling of `403 Forbidden`;
+- service/network error messaging;
+- redirect-based token acquisition behavior.
 
-## Important build-artifact rule
+Do not modify the Entra/MSAL architecture during Task 7D.
 
-Create React App embeds `REACT_APP_*` variables into static JavaScript during `npm run build`.
+### Private object access
 
-Therefore the frontend test build and production build are intentionally separate:
+Preserve backend-generated `AccessUrl` values.
 
-same tested source SHA
--> test build with test `REACT_APP_*`
--> production build with production `REACT_APP_*`.
+The frontend must continue to use the backend-provided `AccessUrl` for private objects and must not construct Wasabi object URLs itself.
 
-Do not copy or reuse the test `build/` directory for production.
+### Cursor pagination
 
-This task promotes the **same source SHA**, not a byte-for-byte test build artifact.
+Phase 5 cursor pagination is complete and production-proven.
 
-Do not introduce artifact storage/promotion infrastructure in this task.
+Preserve:
 
-If byte-identical artifact promotion becomes a future requirement, treat it as a separate architecture decision.
+- opaque continuation-token handling;
+- safe query encoding;
+- page history behavior;
+- previous/next navigation;
+- page-size reset behavior;
+- folder navigation reset behavior;
+- no `TotalKeyCount` traversal or full-list reconstruction.
 
-## Production external setup
+Do not redesign pagination while fixing stale requests.
 
-The technical owner has already completed the production external setup.
+## Phase 6 CI/CD is complete
 
-Existing production configuration includes:
+Preserve all existing frontend workflows unless explicitly instructed otherwise:
 
-- Google Cloud / Firebase project `wasabi-drive-e73cd`;
-- production Firebase Hosting already serving `https://wasabi-drive-e73cd.web.app/`;
-- dedicated Google service account:
-  `wasabi-drive-gh-prd-deployer@wasabi-drive-e73cd.iam.gserviceaccount.com`;
-- that service account has production Firebase Hosting deployment permission;
-- production WIF pool:
-  `github-prd`;
-- production WIF provider:
-  `github-app-wasabi-drive-prd`;
-- provider trust restricted to:
-  - owner `mykiepineda`;
-  - repository `mykiepineda/app-wasabi-drive`;
-  - ref `refs/heads/master`;
-  - GitHub Environment `prd`;
-  - GitHub event `workflow_dispatch`;
-- the frontend GitHub repository has Environment `prd`;
-- the `prd` Environment is restricted to `master`;
-- the `prd` Environment contains the required production build and WIF variables;
-- Microsoft Entra already has the production SPA redirect URI;
-- production Google/Firebase billing setup is complete.
+- `.github/workflows/frontend-pr-checks.yml`;
+- `.github/workflows/frontend-test-deploy.yml`;
+- `.github/workflows/frontend-prd-deploy.yml`.
 
-Do not create or modify Google Cloud, Firebase, GitHub Environment, or Entra resources from source code.
+Do not change:
 
-If the workflow encounters an authorization/configuration error, report the exact failure rather than broadening IAM.
+- pinned GitHub Action SHAs;
+- Node.js 24;
+- Google Workload Identity Federation;
+- test or production identities;
+- Firebase project targeting;
+- production manual workflow dispatch;
+- exact-SHA production promotion;
+- detached production checkout / SHA verification;
+- build-time `REACT_APP_*` configuration behavior.
 
-## Production GitHub Environment variables
+Task 7D does not require workflow changes.
 
-The workflow must consume these existing GitHub Environment **variables**:
+## Task 7D objective
 
-- `REACT_APP_API_URL`;
-- `REACT_APP_ENTRA_TENANT_ID`;
-- `REACT_APP_ENTRA_CLIENT_ID`;
-- `REACT_APP_ENTRA_API_SCOPE`;
-- `GCP_WORKLOAD_IDENTITY_PROVIDER`;
-- `GCP_DEPLOY_SERVICE_ACCOUNT`.
+Correct two concrete frontend reliability defects without broadly refactoring `Home.jsx`:
 
-Do not hardcode the WIF provider resource or deploy service-account email into the workflow when the Environment variables already exist.
+1. prevent an older asynchronous browse request from overwriting state after a newer navigation/request has started;
+2. stop mutating breadcrumb React state.
 
-The production Firebase project ID itself is stable, non-secret deployment configuration and may be explicit in the workflow as:
+The current source has both defects:
 
-`wasabi-drive-e73cd`
+- `Home.jsx` performs asynchronous bucket/region/object requests without effect cancellation or stale-result protection;
+- `breadcrumbsReducer` uses `splice()` on the existing state array when navigating back to an existing breadcrumb.
 
-No credential secret should be required for production Firebase deployment.
+## Required stale-request behavior
 
-## Required workflow
+Use `AbortController` as the primary mechanism.
 
-Create:
+The `useEffect` responsible for browsing should create one controller for that effect execution and abort it from the effect cleanup.
 
-`.github/workflows/frontend-prd-deploy.yml`
+Pass the controller's `signal` through every API call started by that effect, including:
 
-Recommended workflow name:
+- bucket listing;
+- bucket-region lookup;
+- object listing.
 
-`Frontend Production Promotion`
+`authenticatedFetch` already forwards caller options to `fetch`. Preserve that behavior and use it for `signal` propagation.
 
-The workflow must be manual only.
+### Important cancellation rule
 
-Use:
+The current `authenticatedFetch` converts every rejected `fetch()` into `ApiRequestError("service")`. That would incorrectly turn intentional `AbortController` cancellation into a user-visible service error.
 
-```yaml
-on:
-  workflow_dispatch:
-    inputs:
-      source_sha:
-        description: Full 40-character master commit SHA already validated in test
-        required: true
-        type: string
-```
+Modify `authenticatedFetch` narrowly so that a rejected fetch whose error has `name === "AbortError"` is rethrown unchanged. Continue converting other fetch/network failures to the existing service `ApiRequestError`.
 
-Do not add:
+Do not change existing `401`, `403`, or other HTTP error categorization.
 
-- `push`;
-- `pull_request`;
-- `schedule`;
-- automatic production deployment.
+### Stale-result guard
 
-## GitHub token permissions
+Do not rely only on native `fetch` honoring abort.
 
-Explicitly request only:
+After awaited asynchronous boundaries, ensure an effect whose signal has already been aborted does not apply state updates. This protects against late promises/mocks and prevents old requests from changing:
 
-```yaml
-permissions:
-  contents: read
-  id-token: write
-```
+- contents;
+- pagination state;
+- bucket/region context;
+- error state;
+- loading state.
 
-`id-token: write` permits GitHub to request an OIDC token.
+An intentional abort must not:
 
-It does not itself grant Google Cloud permissions.
+- show the service/network error message;
+- clear the newer request's contents;
+- clear the newer request's loading state;
+- overwrite newer pagination/navigation results.
 
-Do not add broader GitHub token permissions unless a concrete requirement is demonstrated and reviewed.
+Keep this implementation local to the existing effect; do not add a request manager, global store, sequence-number framework, or data-fetching library.
 
-## Production concurrency
+## Required breadcrumb behavior
 
-Use:
+Replace mutation of the existing breadcrumb array with an immutable update.
 
-```yaml
-concurrency:
-  group: frontend-prd-deployment
-  cancel-in-progress: false
-```
+When an existing breadcrumb is selected, return a new array containing the required prefix. `slice()` is appropriate; `splice()` is not.
 
-Only one production Hosting deployment should execute at a time.
+Preserve breadcrumb semantics and ordering.
 
-A later request should wait rather than cancel an in-progress production deployment.
+A small named export of the existing `breadcrumbsReducer` from `Home.jsx` is permitted only if needed for a direct focused immutability test. Do not extract `Home` into new architectural layers merely for testing.
 
-## Production job and Environment
+## Expected files/areas
 
-The production job should:
+Inspect current source before editing. Likely Task 7D files are:
 
-- run on `ubuntu-latest`;
-- use GitHub Environment `prd`;
-- expose the production URL in the Environment UI.
+- `src/pages/Home.jsx`;
+- `src/auth/api-client.js`;
+- `src/pages/Home.pagination.test.js` and/or `src/pages/Home.test.js`;
+- `src/auth/api-client.test.js`.
 
-Use:
+Add another narrowly scoped test file only if it makes the reliability behavior clearer.
 
-```yaml
-environment:
-  name: prd
-  url: https://wasabi-drive-e73cd.web.app/
-```
+Do not modify package/dependency manifests for Task 7D.
 
-Also ensure the workflow can only execute its deployment job when dispatched from `master`.
+## Required tests
 
-Match the existing backend production-promotion defense-in-depth pattern.
+Preserve all existing tests.
 
-A suitable job guard is:
+Add focused coverage proving at least:
 
-```yaml
-if: github.ref == 'refs/heads/master'
-```
+1. a late/stale request cannot replace the result of a newer navigation request;
+2. an aborted request does not produce the existing service/network error UI;
+3. stale request cleanup does not clear a newer request's loading/content state;
+4. `authenticatedFetch` rethrows `AbortError` rather than converting it to `ApiRequestError("service")`;
+5. ordinary rejected fetch/network failures still become the existing service `ApiRequestError`;
+6. breadcrumb reduction does not mutate the input state array and preserves expected breadcrumb output;
+7. existing cursor pagination behavior continues to pass.
 
-The external GitHub Environment restriction is an additional control, not a replacement for workflow validation.
+Where practical, use deferred promises in tests to control completion order and prove that an older request resolving after a newer request cannot win.
 
-## Exact source-SHA validation
-
-The production workflow must require the caller to enter a full 40-character Git commit SHA.
-
-Do not accept:
-
-- branch names;
-- tag names;
-- abbreviated SHAs;
-- arbitrary refs.
-
-Checkout must first obtain enough repository history to validate an older known-good `master` SHA.
-
-Use the approved checkout action with:
-
-```yaml
-fetch-depth: 0
-persist-credentials: false
-```
-
-Then validate:
-
-1. `source_sha` matches exactly 40 hexadecimal characters;
-2. the SHA resolves to a Git commit;
-3. the SHA is an ancestor of `origin/master`;
-4. checkout switches to that exact SHA in detached HEAD state;
-5. `git rev-parse HEAD` exactly matches the requested commit.
-
-This allows both normal promotion and rollback to a known-good historical `master` commit.
-
-Do not require the SHA to equal the current tip of `master`.
-
-Do not accept commits that are not in `master` history.
-
-## Approved GitHub Actions pins
-
-Reuse the already reviewed official actions and exact pins.
-
-Checkout:
-
-`actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1`
-
-Node:
-
-`actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0`
-
-Google authentication:
-
-`google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3.0.0`
-
-Do not replace these with floating tags.
-
-Do not add unnecessary third-party actions.
-
-Do not use `FirebaseExtended/action-hosting-deploy`.
-
-## Node and dependency installation
-
-After checking out the exact promoted SHA, use:
-
-```yaml
-node-version: "24"
-package-manager-cache: false
-```
-
-Then run:
-
-```bash
-npm ci
-```
-
-Do not upgrade dependencies.
-
-Do not regenerate `package-lock.json`.
-
-Do not remediate npm audit findings in this task.
-
-## Production tests
-
-Before building or obtaining Google credentials, run:
-
-```bash
-npm run test:ci
-```
-
-The production workflow reruns the frontend regression tests even though the same source SHA was already validated in test.
-
-Do not weaken tests to make deployment pass.
-
-If tests fail, production deployment must not continue.
-
-## Production build
-
-Supply the four production `REACT_APP_*` values from GitHub Environment `prd`.
-
-Build with:
-
-```bash
-npm run build
-```
-
-The build must happen **before** Google authentication.
-
-Do not expose Google credentials to the React build.
-
-Do not reuse a test build.
-
-Do not use test Environment variables in production.
-
-## Build-before-auth boundary
-
-The production sequence must be:
-
-```text
-checkout exact source SHA
--> setup Node
--> npm ci
--> npm run test:ci
--> npm run build
--> record deployment context
--> authenticate to Google
--> Firebase deploy
-```
-
-This boundary is intentional.
-
-The React build requires only public browser-visible configuration.
-
-Google deployment credentials should not exist until after the build has completed.
-
-## Deployment traceability
-
-Before Google authentication, log only non-secret context:
-
-- requested source SHA;
-- verified checked-out SHA;
-- environment = `prd`;
-- Firebase project = `wasabi-drive-e73cd`;
-- GitHub workflow run URL.
-
-Do not print:
-
-- Google access tokens;
-- OIDC tokens;
-- credential-file contents;
-- private keys;
-- Entra access tokens.
-
-Important: after checking out an input SHA, `${{ github.sha }}` still represents the workflow-dispatch ref's SHA and is not necessarily the source being promoted.
-
-For production traceability, use:
-
-- `${{ inputs.source_sha }}` and/or
-- `git rev-parse HEAD`
-
-as the promoted source identifier.
-
-Do not label `${{ github.sha }}` as the promoted source SHA unless they happen to be identical.
-
-## Google authentication
-
-Authenticate only after tests and build succeed.
-
-Use:
-
-```yaml
-- name: Authenticate to Google Cloud
-  uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3.0.0
-  with:
-    project_id: wasabi-drive-e73cd
-    workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
-    service_account: ${{ vars.GCP_DEPLOY_SERVICE_ACCOUNT }}
-    create_credentials_file: true
-    export_environment_variables: true
-```
-
-Do not use:
-
-- service-account JSON;
-- `FIREBASE_TOKEN`;
-- `firebase login`;
-- `firebase login:ci`.
-
-The production service account and WIF provider are already configured externally.
-
-Do not modify IAM to make CI pass.
-
-## Credential-file hygiene
-
-Task 6G already established the Google auth credential-file hygiene rule.
-
-The current `master` should contain:
-
-```text
-gha-creds-*.json
-```
-
-in `.gitignore`.
-
-Verify that it remains present.
-
-Do not remove it.
-
-No `.gitignore` change is expected for Task 6H-B if the Task 6G state is intact.
-
-The build occurs before authentication so the temporary credentials file cannot be included in the React build.
-
-## Firebase production deployment
-
-After authentication, deploy the already-built `build/` directory.
-
-Do **not** run:
-
-```bash
-npm run deploy:prd
-```
-
-inside the GitHub Actions production workflow.
-
-The existing local fallback script performs another `npm run build`, which would rebuild after Google credentials had been obtained.
-
-Use the repository-local Firebase CLI directly.
-
-For the automated production workflow, explicitly target the production Firebase project:
-
-```bash
-npm exec -- firebase deploy --only hosting --project wasabi-drive-e73cd --non-interactive
-```
-
-Using the explicit production project ID in the production workflow reduces ambiguity during promotion and rollback.
-
-The existing `.firebaserc` `prd` alias and local `npm run deploy:prd` fallback remain unchanged.
-
-When practical, include a Hosting deployment message containing the promoted source SHA and GitHub run ID, for example:
-
-```bash
--m "sha:${{ inputs.source_sha }} run:${{ github.run_id }}"
-```
-
-Do not use `${{ github.sha }}` as the release SHA if the workflow may be promoting an older tested commit.
-
-## Existing local deployment commands
-
-Preserve the existing scripts:
-
-```json
-"deploy:test": "npm run build && firebase deploy --only hosting --project test",
-"deploy:prd": "npm run build && firebase deploy --only hosting --project prd"
-```
-
-They remain manual fallback commands.
-
-Do not modify `.firebaserc`.
-
-Do not modify `firebase.json`.
-
-Do not change Firebase Hosting architecture.
-
-## Rollback model
-
-Production rollback remains deliberate and manual.
-
-Rollback procedure:
-
-1. identify a known-good full 40-character commit SHA from `master`;
-2. manually dispatch `Frontend Production Promotion`;
-3. enter that known-good SHA;
-4. workflow validates the SHA is in `master` history;
-5. workflow rebuilds that source using the current production `REACT_APP_*` configuration;
-6. workflow redeploys Firebase Hosting production;
-7. manually validate production.
-
-This is **source-SHA rollback**, not restoration of a historical build artifact.
-
-If production Environment configuration has changed since the historical release, rebuilding the old source with current production variables may not produce byte-identical output to the original deployment.
-
-Do not introduce historical artifact storage or artifact-promotion infrastructure during this task.
-
-## README documentation
-
-Update `README.md` to describe the completed release model.
-
-Document:
-
-- pull requests run frontend CI;
-- merge to protected `master` automatically deploys the test frontend;
-- test uses `https://wasabi-drive-test.web.app/`;
-- test deployment uses GitHub OIDC -> Google WIF -> short-lived credentials;
-- after validating the exact `master` SHA in test, production promotion is manual;
-- production workflow requires a full 40-character tested `master` SHA;
-- production uses GitHub Environment `prd`;
-- production rebuilds the exact source SHA using production `REACT_APP_*` values;
-- production and test are separate builds because Create React App embeds environment values at build time;
-- production Google authentication uses WIF and a dedicated production deploy service account;
-- no service-account JSON key or `FIREBASE_TOKEN` is stored;
-- production deploys only Firebase Hosting to `wasabi-drive-e73cd`;
-- production URL is `https://wasabi-drive-e73cd.web.app/`;
-- `npm run deploy:test` and `npm run deploy:prd` remain manual fallback commands;
-- rollback is performed by promoting a known-good full `master` SHA;
-- rollback rebuilds with current production build-time configuration.
-
-Do not document sensitive values or credentials.
-
-## Expected source changes
-
-Expected Task 6H-B changes are limited to:
-
-- `.github/workflows/frontend-prd-deploy.yml`;
-- `.github/copilot-instructions.md`;
-- `README.md`.
-
-No changes are expected to:
-
-- application source under `src/`;
-- tests;
-- `package.json`;
-- `package-lock.json`;
-- `.firebaserc`;
-- `firebase.json`;
-- `.env.example`;
-- MSAL configuration;
-- `.gitignore`, assuming Task 6G credential hygiene is still present;
-- the existing test deployment workflow.
-
-If implementation appears to require any of those files, stop and report why rather than expanding scope automatically.
-
-## Backend isolation
-
-Do not modify the backend repository.
-
-Do not modify:
-
-- backend GitHub Actions;
-- AWS IAM;
-- Serverless Framework;
-- API Gateway;
-- Lambda;
-- backend Bruno tests;
-- backend health endpoint;
-- backend configuration.
-
-The backend production pipeline is complete for the current phase.
-
-Frontend 6H-B must remain an independent frontend repository change.
-
-## Branch and change management
-
-Use branch:
-
-`ci/frontend-prd-promotion`
-
-Do not commit directly to `master`.
-
-Keep this as one focused PR.
-
-Do not perform unrelated cleanup.
-
-Do not deploy production from the feature branch.
-
-Do not deploy test manually from the feature branch.
-
-## Local validation before commit
+Known React `act(...)` warnings may be corrected only where directly caused by tests touched for this task. Do not turn Task 7D into broad test cleanup.
 
 Run:
 
-```bash
-npm ci
-npm run test:ci
-npm run build
-git diff --check
-git status --short
-```
+`npm run test:ci`
 
-For local build validation, use safe non-secret placeholder `REACT_APP_*` values if real environment values are not already available.
+`npm run build`
 
-Do not use production cloud credentials for local validation.
+Also run:
 
-Do not run:
+`git diff --check`
 
-```bash
-npm run deploy:test
-npm run deploy:prd
-```
+Do not weaken tests simply to make the implementation pass.
 
-from the feature branch.
+## Task 7D non-goals
 
-Do not invoke the production GitHub workflow until the PR is merged.
+Do NOT during Task 7D:
 
-## Static workflow review
+- remove `aws-sdk` from the frontend; that is Task 7E;
+- upgrade dependencies;
+- run `npm audit fix` or `npm audit fix --force`;
+- migrate Create React App;
+- upgrade React;
+- introduce TypeScript;
+- redesign components or UI;
+- broadly decompose `Home.jsx`;
+- change pagination semantics;
+- change `AccessUrl` behavior;
+- change MSAL/Entra;
+- change Firebase configuration;
+- change GitHub Actions workflows;
+- change backend APIs;
+- implement media thumbnails/viewers;
+- start Phase 8.
 
-Before completion, confirm:
+## Git/change-management
 
-1. workflow trigger is `workflow_dispatch` only;
-2. `source_sha` is required;
-3. deployment job is restricted to dispatch from `master`;
-4. GitHub Environment is `prd`;
-5. Environment URL is `https://wasabi-drive-e73cd.web.app/`;
-6. permissions are only `contents: read` and `id-token: write`;
-7. production concurrency is serialized with `cancel-in-progress: false`;
-8. checkout is pinned to the approved full SHA;
-9. checkout uses `fetch-depth: 0`;
-10. checkout uses `persist-credentials: false`;
-11. source input must be a full 40-character SHA;
-12. source SHA must resolve to a commit;
-13. source SHA must be an ancestor of `origin/master`;
-14. exact SHA is checked out detached;
-15. checked-out SHA is verified;
-16. Node.js 24 is used;
-17. `npm ci` runs;
-18. `npm run test:ci` runs before build/deploy;
-19. production `REACT_APP_*` values come from GitHub Environment variables;
-20. `npm run build` runs before Google authentication;
-21. deployment context logs requested and verified source SHA;
-22. traceability does not incorrectly use `${{ github.sha }}` as the promoted SHA;
-23. Google auth uses the reviewed pinned action;
-24. Google auth uses WIF provider variable;
-25. Google auth uses dedicated service-account variable;
-26. no Google credential secret is referenced;
-27. no service-account JSON key is referenced;
-28. no `FIREBASE_TOKEN` is referenced;
-29. Firebase CLI is repository-local;
-30. deploy is `--only hosting`;
-31. deploy explicitly targets `wasabi-drive-e73cd`;
-32. deploy is non-interactive;
-33. deployment message uses the promoted input SHA/run ID;
-34. no second React build runs after Google authentication;
-35. existing automatic test deployment workflow is unchanged;
-36. application source is unchanged;
-37. MSAL configuration is unchanged;
-38. package files are unchanged;
-39. Firebase aliases/config are unchanged;
-40. backend is untouched.
+`master` is protected.
 
-## First production workflow validation
+Task 7D belongs on:
 
-Do not deploy from the feature branch.
+`fix/frontend-request-races`
 
-After:
+Do not commit directly to `master`.
 
-- PR CI passes;
-- PR is reviewed;
-- PR is merged to protected `master`;
+Keep changes focused and reviewable. Avoid unrelated formatting or cleanup.
 
-the merge SHA will automatically run the existing frontend test deployment.
+Suggested focused commits, if useful:
 
-Then:
+- `fix(frontend): prevent stale browse request updates`
+- `fix(frontend): make breadcrumb updates immutable`
+- `test(frontend): cover request cancellation and breadcrumb state`
 
-1. confirm the automatic test workflow succeeds;
-2. validate `https://wasabi-drive-test.web.app/`;
-3. verify Entra sign-in works;
-4. verify the frontend calls the backend `test` API;
-5. verify bucket/object navigation and existing application behavior;
-6. copy the exact full 40-character tested `master` SHA;
-7. manually run `Frontend Production Promotion` from `master`;
-8. enter exactly that tested SHA;
-9. verify SHA validation succeeds;
-10. verify tests pass again;
-11. verify the production build succeeds;
-12. verify Google OIDC/WIF authentication succeeds;
-13. verify the dedicated production service account is used;
-14. verify Firebase deployment targets `wasabi-drive-e73cd`;
-15. verify Hosting deployment succeeds;
-16. validate `https://wasabi-drive-e73cd.web.app/`;
-17. verify production Entra sign-in;
-18. verify production API calls target the production backend;
-19. verify bucket/object navigation and existing application behavior.
+Do not force commit splitting if a different small cohesive structure is clearer.
 
-If Google/Firebase authorization fails, capture the exact error and stop.
-
-Do not broaden IAM or add long-lived credentials as a workaround.
-
-## Non-goals
-
-Do not implement during Task 6H-B:
-
-- backend changes;
-- backend deployment changes;
-- automatic production deployment on merge;
-- automatic production deployment on push;
-- production preview channels;
-- Firebase Authentication;
-- Firestore;
-- Realtime Database;
-- Cloud Functions;
-- App Hosting;
-- runtime frontend configuration;
-- artifact repository/storage;
-- byte-identical artifact promotion;
-- custom domains;
-- Entra redesign;
-- MSAL redesign;
-- frontend redesign;
-- dependency upgrades;
-- npm audit remediation;
-- Create React App migration;
-- Vite;
-- TypeScript;
-- CORS changes;
-- unrelated cleanup.
+Do not commit, push, merge, or deploy unless explicitly instructed.
 
 ## Completion report
 
-When implementation is complete, stop and report:
+When finished, report:
 
-- branch used;
-- exact files changed;
-- workflow filename/name;
-- trigger conditions;
-- `source_sha` input definition;
-- master-only control;
-- GitHub Environment and URL;
-- GitHub token permissions;
-- concurrency behavior;
-- checkout action/pin and options;
-- exact SHA-validation logic;
-- Node version;
-- `npm ci` result;
-- `npm run test:ci` result and test count;
-- production build result;
-- confirmation build occurs before Google auth;
-- Google auth action/pin;
-- WIF provider variable referenced;
-- deploy service-account variable referenced;
-- confirmation no Google credential secret is used;
-- confirmation no `FIREBASE_TOKEN` is used;
-- Firebase deploy command;
-- production project targeted;
-- deployment traceability behavior;
-- confirmation promoted source uses input/verified SHA rather than assuming `${{ github.sha }}`;
-- README changes;
-- confirmation existing test-deploy workflow is unchanged;
-- confirmation `.firebaserc` is unchanged;
-- confirmation `firebase.json` is unchanged;
-- confirmation `package.json` and `package-lock.json` are unchanged;
-- confirmation application source and tests are unchanged;
-- confirmation MSAL configuration is unchanged;
-- confirmation backend is untouched;
+- branch name;
+- starting/base SHA;
+- files changed;
+- exact cancellation/stale-result approach;
+- how `AbortError` is distinguished from a real network failure;
+- confirmation that loading/error state cannot be cleared by an older aborted effect;
+- breadcrumb immutability change;
+- tests added;
+- exact `npm run test:ci` result and test counts;
+- exact `npm run build` result;
 - `git diff --check` result;
-- `git status --short` result;
-- confirmation no feature-branch deployment occurred;
-- any unexpected issue.
+- `git status --short`;
+- confirmation that package files, workflows, MSAL/Entra architecture, cursor pagination, `AccessUrl`, and UI behavior remain unchanged;
+- any remaining issues or risks.
 
-Do not commit unless explicitly instructed.
-
-Do not continue beyond Task 6H-B.
+Stop after Task 7D. Do not automatically continue to Task 7E.
