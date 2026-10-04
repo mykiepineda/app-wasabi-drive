@@ -26,7 +26,7 @@ const encodePrefix = (prefix) =>
     .map((component) => encodeURIComponent(component))
     .join("/");
 
-const breadcrumbsReducer = (state, action) => {
+export const breadcrumbsReducer = (state, action) => {
   let idx = -1;
   for (let i = 0; i < state.length; i++) {
     if (state[i].target === action.target) {
@@ -42,9 +42,8 @@ const breadcrumbsReducer = (state, action) => {
       onClickString: action.onClickString,
     };
     return [...state, newState];
-  } else {
-    return state.splice(0, idx + 1);
   }
+  return state.slice(0, idx + 1);
 };
 
 const Home = () => {
@@ -149,6 +148,8 @@ const Home = () => {
     : paginationContext.pageHistory;
 
   useEffect(() => {
+    const controller = new AbortController();
+
     const fetchBuckets = async () => {
       const response = await authenticatedFetch(
         instance,
@@ -156,12 +157,17 @@ const Home = () => {
         `${process.env.REACT_APP_API_URL}/buckets`,
         {
           method: "GET",
+          signal: controller.signal,
         }
       );
-      if (!response) {
+      if (!response || controller.signal.aborted) {
         return;
       }
       const results = await response.json();
+      if (controller.signal.aborted) {
+        return;
+      }
+
       const buckets = results.Buckets;
       const initialBreadcrumbsState = [
         {
@@ -202,12 +208,17 @@ const Home = () => {
         `${process.env.REACT_APP_API_URL}/buckets/${bucket}/region`,
         {
           method: "GET",
+          signal: controller.signal,
         }
       );
-      if (!response) {
+      if (!response || controller.signal.aborted) {
         return null;
       }
-      return await response.json();
+      const region = await response.json();
+      if (controller.signal.aborted) {
+        return null;
+      }
+      return region;
     };
 
     const fetchObjects = async () => {
@@ -224,6 +235,9 @@ const Home = () => {
         };
       } else {
         const region = await fetchRegion(bucket);
+        if (controller.signal.aborted) {
+          return;
+        }
         setBucketContext({
           name: bucket,
           region,
@@ -245,11 +259,15 @@ const Home = () => {
 
       const response = await authenticatedFetch(instance, account, url.toString(), {
         method: "GET",
+        signal: controller.signal,
       });
-      if (!response) {
+      if (!response || controller.signal.aborted) {
         return;
       }
       const body = await response.json();
+      if (controller.signal.aborted) {
+        return;
+      }
 
       let folders = [];
       let files = [];
@@ -276,11 +294,14 @@ const Home = () => {
         });
       }
 
+      if (controller.signal.aborted) {
+        return;
+      }
+
       setPaginationContext((prevState) => {
         let minPageKey = 1;
         const keyCount = body.KeyCount ?? folders.length + files.length;
-        const maxPageKey =
-          pageHistoryIndex * maxKeys + keyCount;
+        const maxPageKey = pageHistoryIndex * maxKeys + keyCount;
 
         if (pageHistoryIndex > 0) {
           minPageKey = pageHistoryIndex * maxKeys + 1;
@@ -299,6 +320,10 @@ const Home = () => {
         return newContext;
       });
 
+      if (controller.signal.aborted) {
+        return;
+      }
+
       setContents((prevState) => {
         return {
           breadcrumbs: breadcrumbsReducer(prevState.breadcrumbs, breadcrumb),
@@ -308,7 +333,9 @@ const Home = () => {
         };
       });
 
-      setIsLoading(false);
+      if (!controller.signal.aborted) {
+        setIsLoading(false);
+      }
     };
 
     // Main
@@ -318,6 +345,9 @@ const Home = () => {
 
     fetchPage()
       .catch((error) => {
+        if (controller.signal.aborted || error?.name === "AbortError") {
+          return;
+        }
         setContents({
           breadcrumbs: [],
           buckets: [],
@@ -330,7 +360,15 @@ const Home = () => {
             : API_ERROR_MESSAGES.service
         );
       })
-      .finally(() => setIsLoading(false));
+      .finally(() => {
+        if (!controller.signal.aborted) {
+          setIsLoading(false);
+        }
+      });
+
+    return () => {
+      controller.abort();
+    };
   }, [
     account,
     bucketClickHandler,

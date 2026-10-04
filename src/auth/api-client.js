@@ -56,7 +56,10 @@ export const authenticatedFetch = async (
         Authorization: `Bearer ${accessToken}`,
       },
     });
-  } catch {
+  } catch (error) {
+    if (error && error.name === "AbortError") {
+      throw error;
+    }
     throw new ApiRequestError("service");
   }
 
