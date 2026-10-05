@@ -58,7 +58,14 @@ const File = ({ accessUrl, description }) => {
       ...attributes,
       icon: faImage,
       color: "purple",
-      htmlText: <img src={accessUrl} alt={description} />,
+      htmlText: (
+        <img
+          src={accessUrl}
+          alt={description}
+          loading="lazy"
+          decoding="async"
+        />
+      ),
     };
   }
 

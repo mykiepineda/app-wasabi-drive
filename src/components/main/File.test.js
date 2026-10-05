@@ -10,10 +10,15 @@ test("uses the authorized URL for a file link", () => {
   expect(screen.getByRole("link")).toHaveAttribute("href", accessUrl);
 });
 
-test("uses the authorized URL for an image thumbnail", () => {
+test("uses the authorized URL and native loading hints for an image", () => {
   render(<File accessUrl={accessUrl} description="photo.png" />);
 
-  expect(screen.getByRole("img")).toHaveAttribute("src", accessUrl);
+  const image = screen.getByRole("img");
+
+  expect(image).toHaveAttribute("src", accessUrl);
+  expect(image).toHaveAttribute("alt", "photo.png");
+  expect(image).toHaveAttribute("loading", "lazy");
+  expect(image).toHaveAttribute("decoding", "async");
   expect(screen.getByRole("link")).toHaveAttribute("href", accessUrl);
 });
 
