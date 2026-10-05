@@ -15,13 +15,16 @@ jest.mock("../auth/api-client", () => {
   };
 });
 jest.mock("../components/header/Header", () => () => null);
-jest.mock("../components/main/Contents", () => ({
-  contents,
-  onBucketClick,
-  onObjectClick,
-  onPreviousPageClick,
-  onNextPageClick,
-}) => {
+let mockContentsProps;
+jest.mock("../components/main/Contents", () => (props) => {
+  mockContentsProps = props;
+  const {
+    contents,
+    onBucketClick,
+    onObjectClick,
+    onPreviousPageClick,
+    onNextPageClick,
+  } = props;
   const mockReact = require("react");
   const PaginationContext = require("../store/pagination-context").default;
   const ObjectsPerPage = require("../components/main/pagination/ObjectsPerPage").default;
@@ -71,6 +74,7 @@ const objectPage = (key, nextContinuationToken, isTruncated = true) => ({
 });
 
 beforeEach(() => {
+  mockContentsProps = null;
   useMsal.mockReturnValue({
     accounts: [account],
     instance: {},
@@ -132,6 +136,7 @@ test("ignores a stale folder response after a newer navigation request starts", 
   fireEvent.click(await screen.findByRole("button", { name: "bucket" }));
   await waitFor(() => expect(screen.getByText("folder-a")).toBeInTheDocument());
 
+  const onObjectClick = mockContentsProps.onObjectClick;
   fireEvent.click(screen.getByRole("button", { name: "folder-a" }));
   await waitFor(() => expect(authenticatedFetch).toHaveBeenCalledWith(
     expect.any(Object),
@@ -140,7 +145,12 @@ test("ignores a stale folder response after a newer navigation request starts", 
     expect.objectContaining({ method: "GET" })
   ));
 
-  fireEvent.click(screen.getByRole("button", { name: "folder-b" }));
+  act(() => {
+    onObjectClick({
+      stopPropagation: jest.fn(),
+      currentTarget: { dataset: { prefix: "folder-b/" } },
+    });
+  });
   await waitFor(() => expect(authenticatedFetch).toHaveBeenCalledWith(
     expect.any(Object),
     account,
@@ -174,6 +184,64 @@ test("ignores a stale folder response after a newer navigation request starts", 
 
   await waitFor(() => expect(screen.queryByText("stale.txt")).not.toBeInTheDocument());
   expect(screen.getByText("newer.txt")).toBeInTheDocument();
+});
+
+test("hides the previous page while Next or Previous is loading", async () => {
+  const pageTwoResponse = deferred();
+  const previousPageResponse = deferred();
+  let firstPageRequestCount = 0;
+  const nextToken = "page-two-token";
+
+  authenticatedFetch.mockImplementation((instance, account, input) => {
+    const url = new URL(typeof input === "string" ? input : input.toString());
+    if (url.pathname.endsWith("/buckets")) {
+      return Promise.resolve({
+        json: async () => ({ Buckets: [{ Name: "bucket" }] }),
+      });
+    }
+    if (/\/buckets\/[^/]+\/region$/.test(url.pathname)) {
+      return Promise.resolve({ json: async () => regionResponse });
+    }
+    if (/\/buckets\/[^/]+\/objects\//.test(url.pathname)) {
+      const continuationToken = url.searchParams.get("ContinuationToken");
+      if (continuationToken === nextToken) {
+        return pageTwoResponse.promise;
+      }
+      firstPageRequestCount += 1;
+      if (firstPageRequestCount === 1) {
+        return Promise.resolve({
+          json: async () => objectPage("page-1", nextToken),
+        });
+      }
+      return previousPageResponse.promise;
+    }
+
+    return Promise.reject(new Error(`Unexpected request ${url}`));
+  });
+
+  await openBucket("page-1");
+
+  fireEvent.click(screen.getByRole("button", { name: "next" }));
+  await waitFor(() => expect(authenticatedFetch).toHaveBeenCalledTimes(5));
+  expect(screen.queryByText("page-1")).not.toBeInTheDocument();
+
+  await act(async () => {
+    pageTwoResponse.resolve({
+      json: async () => objectPage("page-2", null, false),
+    });
+  });
+  expect(await screen.findByText("page-2")).toBeInTheDocument();
+
+  fireEvent.click(screen.getByRole("button", { name: "previous" }));
+  await waitFor(() => expect(authenticatedFetch).toHaveBeenCalledTimes(7));
+  expect(screen.queryByText("page-2")).not.toBeInTheDocument();
+
+  await act(async () => {
+    previousPageResponse.resolve({
+      json: async () => objectPage("page-1", nextToken),
+    });
+  });
+  expect(await screen.findByText("page-1")).toBeInTheDocument();
 });
 
 test("does not show a service error when an intentional request aborts", async () => {
@@ -260,6 +328,7 @@ test("uses safe prefix paths and resets cursor history when page size changes", 
   await openBucket("folder name/#?.");
   fireEvent.click(screen.getByRole("button", { name: "folder name/#?." }));
   await waitFor(() => expect(authenticatedFetch).toHaveBeenCalledTimes(4));
+  await waitFor(() => expect(screen.getByText("inside-folder")).toBeInTheDocument());
 
   const prefixUrl = new URL(authenticatedFetch.mock.calls[3][2]);
   expect(prefixUrl.pathname).toContain("folder%20name/%23%3F./");
@@ -269,6 +338,7 @@ test("uses safe prefix paths and resets cursor history when page size changes", 
     target: { value: "25" },
   });
   await waitFor(() => expect(authenticatedFetch).toHaveBeenCalledTimes(5));
+  await waitFor(() => expect(screen.getByText("page-size-reset")).toBeInTheDocument());
   const resetUrl = new URL(authenticatedFetch.mock.calls[4][2]);
   expect(resetUrl.searchParams.get("MaxKeys")).toBe("25");
   expect(resetUrl.searchParams.has("ContinuationToken")).toBe(false);

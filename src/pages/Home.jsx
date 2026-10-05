@@ -420,8 +420,9 @@ const Home = () => {
       <BucketContext.Provider value={bucketContext}>
         <Header />
         <main className={classes.root}>
-          {isLoading && <Spinner />}
-          {errorMessage ? (
+          {isLoading ? (
+            <Spinner />
+          ) : errorMessage ? (
             <p role="alert">{errorMessage}</p>
           ) : (
             <Contents
