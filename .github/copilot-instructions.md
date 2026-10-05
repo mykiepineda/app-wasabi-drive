@@ -1,94 +1,132 @@
 # Wasabi Drive Frontend — GitHub Copilot Instructions
 
-## Project role
+## Project role and working agreement
 
 Wasabi Drive is an existing production application and an incremental modernization / cloud-engineering learning project.
 
 The developer is the technical owner and architectural decision-maker.
 
-Copilot is an implementation assistant. Make only the explicitly requested change, preserve working behavior, and do not independently redesign the frontend, authentication model, backend contract, Firebase deployment model, or release process.
+ChatGPT is used for architecture, prioritization, task scoping, implementation prompts, and code review.
 
-Prefer focused, reviewable changes over broad cleanup.
+GitHub Copilot is an implementation assistant. Make only the explicitly requested change. Do not independently redesign the frontend, backend contract, identity architecture, storage architecture, Firebase deployment model, CI/CD model, or release process.
+
+Prefer small, reviewable changes over broad cleanup.
+
+Do not implement roadmap items merely because they appear in these instructions. Only the explicitly approved current task is implementation scope.
+
+Before editing:
+
+1. inspect the actual current source;
+2. check the current Git branch and working tree;
+3. report the starting commit SHA where practical;
+4. preserve newer approved behavior if `master` has advanced;
+5. report a material conflict between these instructions and the current source rather than guessing.
+
+Do not discard user changes or reset a dirty working tree.
 
 ## Current phase
 
 Current modernization phase:
 
-**Phase 7 — Production Reliability and Observability**
+**Phase 8 — Media Performance**
 
-Backend Tasks 7A and 7B are complete and production-validated. Automated CloudWatch alarms from Task 7C are deliberately deferred because the current two-user application does not justify additional AWS cost/maintenance.
+Phase 7 — Production Reliability and Observability — is complete and production-validated.
 
-The active frontend task is:
+Completed frontend foundations include:
 
-**Task 7D — Frontend reliability cleanup**
+- Microsoft Entra authentication using MSAL;
+- OAuth 2.0 / OpenID Connect access-token based backend access;
+- removal of API-key authentication;
+- private Wasabi object access through backend-generated temporary `AccessUrl` values;
+- cursor-based pagination with opaque continuation tokens;
+- stale browse-request cancellation and stale-result protection using `AbortController`;
+- immutable breadcrumb state updates;
+- explicit authentication, authorization, service, and network error handling;
+- removal of the unused frontend AWS SDK;
+- mature frontend CI/CD with automatic Firebase test deployment and manual exact-SHA production promotion.
 
-Do not continue into Task 7E or another modernization phase unless explicitly instructed.
+Do not redo or redesign these completed areas unless the current task exposes a concrete defect.
 
-## Authoritative frontend baseline
+## Active task
 
-Treat the latest `master` source as authoritative.
+The currently approved implementation task is:
 
-The reviewed frontend baseline for Task 7D is commit:
+**Task 8A — Image-grid loading baseline and browser-native image loading optimization**
 
-`2935fadfc22b9c58b4e47dcafcc451b593fe588c`
+Suggested branch:
 
-Before implementation, verify the actual working clone and report its starting SHA. If `master` has advanced, use the newer `master` source and preserve any newer approved behavior.
+`perf/lazy-image-loading`
 
-## Stable architecture to preserve
+Task 8A is frontend-only.
 
-Frontend:
+Do not automatically proceed to video optimization, thumbnail generation, or another Phase 8 task after completing it.
+
+## Phase 8 engineering principle
+
+Use:
+
+**measure -> make the smallest useful change -> measure again**
+
+Prefer browser-native capabilities before adding libraries, abstractions, infrastructure, or custom loading mechanisms.
+
+Infrastructure must earn its place through measured need.
+
+## Stable frontend architecture
+
+Preserve:
 
 - React 18;
 - Create React App / `react-scripts` 5;
 - JavaScript;
 - Firebase Hosting;
 - separate Firebase `test` and production projects;
-- Microsoft Authentication Library (MSAL);
+- MSAL — Microsoft Authentication Library;
 - Microsoft Entra authentication;
-- OAuth 2.0 / OpenID Connect access-token flow;
-- bearer API access token;
+- OAuth 2.0 / OIDC access-token flow;
+- bearer-token backend access;
 - cursor-based bucket/folder pagination;
 - backend-generated short-lived `AccessUrl` values for private Wasabi objects;
-- explicit `401`, `403`, service-error, and network-error handling.
+- explicit `401`, `403`, service, and network error handling;
+- stale request protection using `AbortController`;
+- existing visual file grid and CSS;
+- existing backend API contract.
 
-Preserve the existing backend contract and deployment architecture.
+OIDC = OpenID Connect, the identity layer used alongside OAuth 2.0.
 
-Do not introduce:
+Do not introduce during Task 8A:
 
-- Redux;
+- Redux or another state-management framework;
 - React Query / TanStack Query;
-- another state-management framework;
 - TypeScript;
 - Vite or another Create React App replacement;
-- React major-version upgrades;
+- a React major-version upgrade;
 - Firebase Authentication;
 - Firestore;
 - Realtime Database;
 - Cloud Functions;
-- another hosting platform.
+- another hosting platform;
+- an image-processing library;
+- a lazy-loading package;
+- a custom `IntersectionObserver` implementation.
 
 ## Security and identity invariants
 
-Preserve:
+Preserve the approved flow:
 
 React SPA
 -> MSAL
 -> Microsoft Entra
--> OAuth 2.0 / OpenID Connect access token
+-> OAuth 2.0 API access token
 -> API Gateway
 -> Express backend authentication
 -> application authorization
--> Wasabi.
-
-MSAL = Microsoft Authentication Library.
-
-OIDC = OpenID Connect.
+-> private Wasabi storage.
 
 The backend remains the security authority.
 
 Frontend state is not authorization.
 
-CORS is not authentication.
+CORS — Cross-Origin Resource Sharing — is a browser access policy, not authentication.
 
 Browser-visible frontend configuration is not secret.
 
@@ -97,165 +135,218 @@ Never introduce:
 - a Microsoft Entra client secret into the SPA;
 - API keys as user authentication;
 - Wasabi credentials into the browser;
+- an AWS/Wasabi storage SDK into the frontend;
+- client-side signing;
 - raw/public Wasabi object URLs;
-- client-side authorization as a substitute for backend enforcement.
+- frontend authorization as a substitute for backend authorization.
 
-Do not log or expose bearer tokens or presigned URL query values.
+Do not log or expose bearer tokens or complete presigned URL query values.
 
-## Completed frontend behavior to preserve
+## Private object access invariant
 
-### Authentication and API access
+Wasabi objects remain private.
 
-Preserve:
+The backend supplies a temporary `AccessUrl` for each listed object.
 
-- MSAL token acquisition;
-- bearer-token API calls;
-- safe handling of `401 Unauthorized`;
-- safe handling of `403 Forbidden`;
-- service/network error messaging;
-- redirect-based token acquisition behavior.
+The frontend must continue to consume that exact backend-provided `AccessUrl`.
 
-Do not modify the Entra/MSAL architecture during Task 7D.
+For an image card:
 
-### Private object access
+- the `<img>` source must remain the supplied `accessUrl`;
+- the object link must remain the supplied `accessUrl`.
 
-Preserve backend-generated `AccessUrl` values.
+Never derive, reconstruct, manipulate, or guess a Wasabi storage URL from the bucket name, object key, region, or filename.
 
-The frontend must continue to use the backend-provided `AccessUrl` for private objects and must not construct Wasabi object URLs itself.
+The current backend presigned URL lifetime is approximately one hour.
 
-### Cursor pagination
+Native lazy loading may delay the browser's first request for an off-screen image. An image first requested after the `AccessUrl` has expired could fail. This is an accepted known limitation for Task 8A.
 
-Phase 5 cursor pagination is complete and production-proven.
+Do not build URL-refresh functionality during this task.
 
-Preserve:
+## Cursor pagination invariant
+
+Preserve the existing cursor pagination behavior:
 
 - opaque continuation-token handling;
 - safe query encoding;
-- page history behavior;
+- page history;
 - previous/next navigation;
-- page-size reset behavior;
-- folder navigation reset behavior;
-- no `TotalKeyCount` traversal or full-list reconstruction.
+- Objects-per-page behavior;
+- reset behavior when changing folder or page size;
+- no `TotalKeyCount`;
+- no full-list traversal.
 
-Do not redesign pagination while fixing stale requests.
+Current user-selectable page sizes include:
 
-## Phase 6 CI/CD is complete
+- 10;
+- 25;
+- 50;
+- 100.
 
-Preserve all existing frontend workflows unless explicitly instructed otherwise:
+Do not change these values during Task 8A.
+
+## Frontend reliability invariants
+
+Preserve the Phase 7 stale-request safeguards.
+
+Do not weaken or remove:
+
+- `AbortController`;
+- signal propagation into authenticated API requests;
+- stale-result guards following asynchronous boundaries;
+- special treatment of intentional `AbortError`;
+- protection against an old request clearing or replacing newer state;
+- immutable breadcrumb behavior.
+
+Task 8A does not require changes to `Home.jsx` or `api-client.js` unless the actual current source demonstrates a concrete reason.
+
+## Existing CI/CD is an invariant
+
+Preserve:
 
 - `.github/workflows/frontend-pr-checks.yml`;
 - `.github/workflows/frontend-test-deploy.yml`;
 - `.github/workflows/frontend-prd-deploy.yml`.
+
+The approved release flow remains:
+
+feature branch
+-> pull request
+-> CI
+-> protected `master`
+-> automatic Firebase `test` deployment
+-> validation
+-> manual exact-SHA production promotion.
+
+Production does not automatically deploy on merge.
 
 Do not change:
 
 - pinned GitHub Action SHAs;
 - Node.js 24;
 - Google Workload Identity Federation;
-- test or production identities;
+- deployment identities;
 - Firebase project targeting;
 - production manual workflow dispatch;
-- exact-SHA production promotion;
-- detached production checkout / SHA verification;
+- exact-SHA verification;
+- detached production checkout;
 - build-time `REACT_APP_*` configuration behavior.
 
-Task 7D does not require workflow changes.
+Task 8A requires no CI/CD changes.
 
-## Task 7D objective
+## Task 8A source context
 
-Correct two concrete frontend reliability defects without broadly refactoring `Home.jsx`:
+The reviewed `master` snapshot currently shows:
 
-1. prevent an older asynchronous browse request from overwriting state after a newer navigation/request has started;
-2. stop mutating breadcrumb React state.
+- `src/components/main/File.jsx` renders an image using the backend-provided `accessUrl`;
+- the image currently has no `loading` attribute;
+- the image currently has no `decoding` attribute;
+- the same `accessUrl` is used by the enclosing object link;
+- `File.module.css` displays image/video media inside a roughly 150px-high card using `object-fit: cover`;
+- video cards use the existing `<video>` / `<source>` implementation without an explicit preload policy;
+- `File.test.js` already checks authorized image URLs, object links, video source URLs, and absence of constructed raw Wasabi URLs.
 
-The current source has both defects:
+Verify these assumptions against the current working clone before editing.
 
-- `Home.jsx` performs asynchronous bucket/region/object requests without effect cancellation or stale-result protection;
-- `breadcrumbsReducer` uses `splice()` on the existing state array when navigating back to an existing breadcrumb.
+If the current source differs materially, stop and report the difference instead of blindly applying an outdated patch.
 
-## Required stale-request behavior
+## Task 8A objective
 
-Use `AbortController` as the primary mechanism.
+Reduce unnecessary initial image downloading and decoding work in image-heavy folders using the smallest browser-native change.
 
-The `useEffect` responsible for browsing should create one controller for that effect execution and abort it from the effect cleanup.
+The intended implementation is to add native image loading hints to image-card `<img>` elements while preserving all existing URLs, navigation, styling, security, and component behavior.
 
-Pass the controller's `signal` through every API call started by that effect, including:
+Expected form:
 
-- bucket listing;
-- bucket-region lookup;
-- object listing.
+`loading="lazy"`
 
-`authenticatedFetch` already forwards caller options to `fetch`. Preserve that behavior and use it for `signal` propagation.
+and:
 
-### Important cancellation rule
+`decoding="async"`
 
-The current `authenticatedFetch` converts every rejected `fetch()` into `ApiRequestError("service")`. That would incorrectly turn intentional `AbortController` cancellation into a user-visible service error.
+These attributes apply only to image rendering.
 
-Modify `authenticatedFetch` narrowly so that a rejected fetch whose error has `name === "AbortError"` is rethrown unchanged. Continue converting other fetch/network failures to the existing service `ApiRequestError`.
+`loading="lazy"` tells a supporting browser that an off-screen image may be deferred until it approaches the viewport.
 
-Do not change existing `401`, `403`, or other HTTP error categorization.
+`decoding="async"` requests asynchronous image decoding so image decoding is less likely to block other rendering work.
 
-### Stale-result guard
+These are browser hints; do not implement custom scheduling around them.
 
-Do not rely only on native `fetch` honoring abort.
+## Required implementation behavior
 
-After awaited asynchronous boundaries, ensure an effect whose signal has already been aborted does not apply state updates. This protects against late promises/mocks and prevents old requests from changing:
+For image cards:
 
-- contents;
-- pagination state;
-- bucket/region context;
-- error state;
-- loading state.
+- keep `src={accessUrl}`;
+- keep the existing `alt` text;
+- add `loading="lazy"`;
+- add `decoding="async"`.
 
-An intentional abort must not:
+Preserve the enclosing link:
 
-- show the service/network error message;
-- clear the newer request's contents;
-- clear the newer request's loading state;
-- overwrite newer pagination/navigation results.
+- keep `href={accessUrl}`;
+- keep the current new-tab behavior;
+- keep existing `rel` behavior.
 
-Keep this implementation local to the existing effect; do not add a request manager, global store, sequence-number framework, or data-fetching library.
+Preserve all current CSS and visual layout unless the current source reveals a concrete bug directly caused by the change.
 
-## Required breadcrumb behavior
+Do not add new state, effects, props, hooks, helpers, abstractions, or dependencies merely to apply these native attributes.
 
-Replace mutation of the existing breadcrumb array with an immutable update.
+## Video boundary
 
-When an existing breadcrumb is selected, return a new array containing the required prefix. `slice()` is appropriate; `splice()` is not.
+Do not modify video loading behavior during Task 8A.
 
-Preserve breadcrumb semantics and ordering.
+Do not add or change:
 
-A small named export of the existing `breadcrumbsReducer` from `Home.jsx` is permitted only if needed for a direct focused immutability test. Do not extract `Home` into new architectural layers merely for testing.
+- `preload`;
+- `poster`;
+- autoplay behavior;
+- controls;
+- video metadata fetching;
+- custom video intersection/loading logic.
 
-## Expected files/areas
+Video behavior will be measured separately only if Task 8B is later approved.
 
-Inspect current source before editing. Likely Task 7D files are:
+## Expected files
 
-- `src/pages/Home.jsx`;
-- `src/auth/api-client.js`;
-- `src/pages/Home.pagination.test.js` and/or `src/pages/Home.test.js`;
-- `src/auth/api-client.test.js`.
+Inspect at minimum:
 
-Add another narrowly scoped test file only if it makes the reliability behavior clearer.
+- `src/components/main/File.jsx`;
+- `src/components/main/File.module.css`;
+- `src/components/main/Files.jsx`;
+- `src/components/main/File.test.js`;
+- relevant pagination/page-size components;
+- `.github/copilot-instructions.md`.
 
-Do not modify package/dependency manifests for Task 7D.
+The implementation itself should normally require only a very small change, likely:
+
+- `src/components/main/File.jsx`;
+- `src/components/main/File.test.js`.
+
+Do not modify unrelated files simply because they were inspected.
+
+Do not modify package manifests.
 
 ## Required tests
 
-Preserve all existing tests.
+Preserve every existing frontend test.
 
-Add focused coverage proving at least:
+Update or add focused tests proving:
 
-1. a late/stale request cannot replace the result of a newer navigation request;
-2. an aborted request does not produce the existing service/network error UI;
-3. stale request cleanup does not clear a newer request's loading/content state;
-4. `authenticatedFetch` rethrows `AbortError` rather than converting it to `ApiRequestError("service")`;
-5. ordinary rejected fetch/network failures still become the existing service `ApiRequestError`;
-6. breadcrumb reduction does not mutate the input state array and preserves expected breadcrumb output;
-7. existing cursor pagination behavior continues to pass.
+1. an image continues to use the backend-provided `accessUrl` as its `src`;
+2. the enclosing object link continues to use the same `accessUrl`;
+3. an image has `loading="lazy"`;
+4. an image has `decoding="async"`;
+5. no raw Wasabi URL construction is introduced;
+6. existing video rendering remains unchanged;
+7. ordinary non-image file behavior remains unchanged.
 
-Where practical, use deferred promises in tests to control completion order and prove that an older request resolving after a newer request cannot win.
+Prefer extending the existing `File.test.js` rather than introducing a new test architecture.
 
-Known React `act(...)` warnings may be corrected only where directly caused by tests touched for this task. Do not turn Task 7D into broad test cleanup.
+Do not weaken existing tests to make the change pass.
+
+Known React `act(...)` warnings elsewhere may remain unless this task directly changes the responsible test.
+
+Do not turn Task 8A into broad test cleanup.
 
 Run:
 
@@ -267,68 +358,139 @@ Also run:
 
 `git diff --check`
 
-Do not weaken tests simply to make the implementation pass.
+## Performance measurement boundary
 
-## Task 7D non-goals
+Manual browser performance measurement is performed against the stable Firebase `test` environment using browser developer tools.
 
-Do NOT during Task 7D:
+Do not add:
 
-- remove `aws-sdk` from the frontend; that is Task 7E;
-- upgrade dependencies;
-- run `npm audit fix` or `npm audit fix --force`;
+- application analytics;
+- permanent benchmark code;
+- performance telemetry;
+- new browser instrumentation dependencies.
+
+Copilot must not invent baseline or after-change measurements.
+
+If measurement results have not been supplied, report them as not yet measured.
+
+The principal measurement is initial/pre-scroll image network activity.
+
+Remember:
+
+- lazy loading changes when an original image downloads;
+- it does not reduce the byte size of that original image;
+- total bytes after scrolling through every image may remain similar.
+
+## Task 8A explicit non-goals
+
+Do NOT during Task 8A:
+
+- modify the backend;
+- modify API responses;
+- modify backend presigned URL generation;
+- modify the `AccessUrl` lifetime;
+- build `AccessUrl` refresh logic;
+- change object privacy;
+- change Wasabi bucket policies;
+- add thumbnail generation;
+- generate derived images;
+- add SNS;
+- add SQS;
+- add another Lambda function;
+- add another AWS service;
+- add a CDN or CloudFront;
+- add image-processing infrastructure;
+- add an image library;
+- add a lazy-loading library;
+- add `IntersectionObserver`;
+- change video preload behavior;
+- redesign file cards;
+- redesign the UI;
+- change page-size choices;
+- change pagination;
+- modify MSAL/Entra;
+- modify authentication or authorization;
+- modify request cancellation;
 - migrate Create React App;
 - upgrade React;
-- introduce TypeScript;
-- redesign components or UI;
-- broadly decompose `Home.jsx`;
-- change pagination semantics;
-- change `AccessUrl` behavior;
-- change MSAL/Entra;
-- change Firebase configuration;
-- change GitHub Actions workflows;
-- change backend APIs;
-- implement media thumbnails/viewers;
-- start Phase 8.
+- add TypeScript;
+- perform dependency modernization;
+- run `npm audit fix`;
+- modify Firebase configuration;
+- modify GitHub Actions workflows;
+- implement an image viewer;
+- implement previous/next image navigation;
+- perform unrelated cleanup or formatting.
+
+Task 8A must remain a very small frontend performance PR.
 
 ## Git/change-management
 
 `master` is protected.
 
-Task 7D belongs on:
+Use:
 
-`fix/frontend-request-races`
+`perf/lazy-image-loading`
 
-Do not commit directly to `master`.
+Never implement or commit directly on `master`.
 
-Keep changes focused and reviewable. Avoid unrelated formatting or cleanup.
+Before editing, verify the current branch and starting SHA.
 
-Suggested focused commits, if useful:
+Do not reset, overwrite, or discard existing user work.
 
-- `fix(frontend): prevent stale browse request updates`
-- `fix(frontend): make breadcrumb updates immutable`
-- `test(frontend): cover request cancellation and breadcrumb state`
+Do not force-push.
 
-Do not force commit splitting if a different small cohesive structure is clearer.
+Do not push, merge, deploy, or promote production unless explicitly instructed.
 
-Do not commit, push, merge, or deploy unless explicitly instructed.
+Keep the diff narrowly scoped.
+
+If commits are explicitly requested, suitable focused messages are:
+
+`perf(frontend): defer offscreen image loading`
+
+`test(frontend): cover lazy image rendering`
+
+A single small cohesive commit is also acceptable if that produces a clearer review.
+
+Do not mix unrelated cleanup into the Task 8A commits.
+
+## Deployment and rollback context
+
+After review and merge to `master`, the existing workflow automatically builds, tests, and deploys to Firebase `test`.
+
+The owner will then repeat browser performance measurements and functional regression testing.
+
+Production promotion remains a separate manual exact-SHA action.
+
+Rollback uses the existing production workflow to promote the previous known-good frontend `master` SHA.
+
+No backend deployment or rollback is expected for Task 8A.
 
 ## Completion report
 
-When finished, report:
+After implementation, stop and report:
 
 - branch name;
 - starting/base SHA;
+- current HEAD SHA if different;
 - files changed;
-- exact cancellation/stale-result approach;
-- how `AbortError` is distinguished from a real network failure;
-- confirmation that loading/error state cannot be cleared by an older aborted effect;
-- breadcrumb immutability change;
-- tests added;
+- exact image element change;
+- confirmation that image `src` still uses the supplied `accessUrl`;
+- confirmation that object `href` still uses the supplied `accessUrl`;
+- confirmation that video code was not changed;
+- tests added or modified;
 - exact `npm run test:ci` result and test counts;
 - exact `npm run build` result;
 - `git diff --check` result;
 - `git status --short`;
-- confirmation that package files, workflows, MSAL/Entra architecture, cursor pagination, `AccessUrl`, and UI behavior remain unchanged;
-- any remaining issues or risks.
+- confirmation that package files were unchanged;
+- confirmation that workflows were unchanged;
+- confirmation that CSS/layout was unchanged unless explicitly necessary;
+- confirmation that MSAL/Entra, pagination, request cancellation, backend contract, and `AccessUrl` architecture were unchanged;
+- baseline/performance measurement results only if they were actually supplied or performed;
+- any observed risk involving `AccessUrl` expiry;
+- any remaining issue.
 
-Stop after Task 7D. Do not automatically continue to Task 7E.
+Stop after Task 8A.
+
+Do not automatically implement Task 8B, change video loading, design thumbnails, or add infrastructure.
