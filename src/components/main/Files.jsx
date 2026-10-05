@@ -8,9 +8,9 @@ const Files = ({ fileList, onClick }) => {
         <h2>Files</h2>
       </div>
       <div className={classes.files}>
-        {fileList.map((file, index) => (
+        {fileList.map((file) => (
           <File
-            key={index}
+            key={file.key}
             prefix={file.key}
             description={file.description}
             accessUrl={file.accessUrl}
