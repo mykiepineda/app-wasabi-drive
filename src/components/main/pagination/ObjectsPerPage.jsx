@@ -2,7 +2,7 @@ import classes from "./ObjectsPerPage.module.css";
 import { useContext } from "react";
 import PaginationContext from "../../../store/pagination-context";
 
-const ObjectsPerPage = () => {
+const ObjectsPerPage = ({ disabled }) => {
   const paginationCtx = useContext(PaginationContext);
 
   const onSelectHandler = (event) => {
@@ -12,7 +12,7 @@ const ObjectsPerPage = () => {
   return (
     <div className={classes.container}>
       <label htmlFor="opp">Objects per page: </label>
-      <select id="opp" value={paginationCtx.maxKeys} onChange={onSelectHandler}>
+      <select id="opp" value={paginationCtx.maxKeys} onChange={onSelectHandler} disabled={disabled}>
         <option value="10">10</option>
         <option value="25">25</option>
         <option value="50">50</option>

@@ -18,8 +18,26 @@
 }
 
 @media (max-width: 560px) {
+  .loadingStatus {
+    width: 100%;
+    order: -1;
+  }
+
   .container {
     justify-content: space-between;
     gap: 8px 12px;
   }
+}
+
+.loadingStatus {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-right: auto;
+  color: #526977;
+  font-size: 0.875rem;
+}
+
+.loadingStatus svg {
+  color: #00bd58;
 }

@@ -3,6 +3,8 @@ import classes from "./Pagination.module.css";
 import PaginationContext from "../../../store/pagination-context";
 import ChevronButton from "../../ui/ChevronButton";
 import ObjectsPerPage from "./ObjectsPerPage";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faSpinner } from "@fortawesome/free-solid-svg-icons";
 
 const ViewingPageXofY = ({ min, max }) => {
   return (
@@ -17,16 +19,17 @@ const PageControls = ({
   onPreviousPageClick,
   reachedEnd,
   onNextPageClick,
+  isLoading,
 }) => {
   return (
     <div className={classes["page-controls"]}>
       <ChevronButton
-        disabled={reachedStart}
+        disabled={isLoading || reachedStart}
         onClick={onPreviousPageClick}
         chevron="left"
       />
       <ChevronButton
-        disabled={reachedEnd}
+        disabled={isLoading || reachedEnd}
         onClick={onNextPageClick}
         chevron="right"
       />
@@ -34,14 +37,20 @@ const PageControls = ({
   );
 };
 
-const Pagination = ({ onPreviousPageClick, onNextPageClick }) => {
+const Pagination = ({ onPreviousPageClick, onNextPageClick, isLoading }) => {
   const paginationCtx = useContext(PaginationContext);
   const hasVisibleRange =
     paginationCtx.maxPageKey >= paginationCtx.minPageKey;
 
   return (
     <div className={classes.container}>
-      <ObjectsPerPage />
+      <ObjectsPerPage disabled={isLoading} />
+      {isLoading && (
+        <div className={classes.loadingStatus} role="status">
+          <FontAwesomeIcon icon={faSpinner} spin />
+          <span>Loading page...</span>
+        </div>
+      )}
       {hasVisibleRange && (
         <ViewingPageXofY
           min={paginationCtx.minPageKey}
@@ -53,6 +62,7 @@ const Pagination = ({ onPreviousPageClick, onNextPageClick }) => {
         onNextPageClick={onNextPageClick}
         reachedStart={paginationCtx.reachedStart}
         reachedEnd={paginationCtx.reachedEnd}
+        isLoading={isLoading}
       />
     </div>
   );

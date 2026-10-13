@@ -7,6 +7,8 @@ import Empty from "./Empty";
 import SubHeader from "./SubHeader";
 import FolderTree from "./FolderTree";
 import Pagination from "./pagination/Pagination";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faSpinner } from "@fortawesome/free-solid-svg-icons";
 
 const ViewToggle = ({ viewMode, onChange }) => (
   <div className={classes.viewToggle} role="group" aria-label="File display">
@@ -34,9 +36,11 @@ const Wrapper = ({
   viewMode,
   onViewModeChange,
   showViewToggle,
+  isLoading,
+  loadingType,
 }) => (
   <section className={classes.contents}>
-    <div className={classes.objects}>
+    <div className={classes.objects} aria-busy={isLoading}>
       {showViewToggle && (
         <div className={classes.toolbar}>
           <ViewToggle viewMode={viewMode} onChange={onViewModeChange} />
@@ -46,7 +50,14 @@ const Wrapper = ({
       <Pagination
         onPreviousPageClick={onPreviousPageClick}
         onNextPageClick={onNextPageClick}
+        isLoading={isLoading && loadingType === "page"}
       />
+      {isLoading && loadingType === "navigation" && (
+        <div className={classes.loadingOverlay} role="status">
+          <FontAwesomeIcon icon={faSpinner} spin />
+          <span>Loading contents...</span>
+        </div>
+      )}
     </div>
   </section>
 );
@@ -67,6 +78,8 @@ const Contents = ({
   isHomePage,
   viewMode,
   onViewModeChange,
+  isLoading,
+  loadingType,
 }) => {
   const displayBucketContents = contents && contents.buckets.length > 0;
   const displayFolderContents = contents && contents.folders.length > 0;
@@ -125,6 +138,8 @@ const Contents = ({
             viewMode={viewMode}
             onViewModeChange={onViewModeChange}
             showViewToggle={!isHomePage}
+            isLoading={isLoading}
+            loadingType={loadingType}
           >
             {content}
           </Wrapper>

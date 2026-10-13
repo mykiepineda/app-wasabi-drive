@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useMsal } from "@azure/msal-react";
 import { ToastContainer, toast, Slide } from "react-toastify";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
@@ -75,6 +75,10 @@ const Home = () => {
   const { instance, accounts } = useMsal();
   const account = accounts[0];
   const [isLoading, setIsLoading] = useState(true);
+  const [hasLoaded, setHasLoaded] = useState(false);
+  const hasLoadedRef = useRef(false);
+  const [loadingType, setLoadingType] = useState("initial");
+  const loadTypeRef = useRef("navigation");
   const [contents, setContents] = useState({
     breadcrumbs: [],
     buckets: [],
@@ -95,6 +99,7 @@ const Home = () => {
   const [paginationContext, setPaginationContext] = useState({
     maxKeys: 10,
     onMaxKeysChange: (maxKeys) => {
+      loadTypeRef.current = "page";
       setPaginationContext((prevState) => ({
         ...prevState,
         maxKeys,
@@ -138,6 +143,7 @@ const Home = () => {
   }, []);
 
   const selectPrefix = useCallback((prefix) => {
+    loadTypeRef.current = "navigation";
     resetPagination();
     setTurnPage((prevState) => ({
       switch: !prevState.switch,
@@ -156,6 +162,7 @@ const Home = () => {
   }, [selectPrefix]);
 
   const selectBucket = useCallback((bucket) => {
+    loadTypeRef.current = "navigation";
     resetPagination();
     setNavigation({
       isHomePage: false,
@@ -238,7 +245,10 @@ const Home = () => {
       const initialBreadcrumbsState = [
         {
           target: "Buckets",
-          onClick: () => setNavigation(INITIAL_NAVIGATION_STATE),
+          onClick: () => {
+            loadTypeRef.current = "navigation";
+            setNavigation(INITIAL_NAVIGATION_STATE);
+          },
           level: 1,
         },
       ];
@@ -406,6 +416,11 @@ const Home = () => {
     };
 
     // Main
+    const nextLoadingType = hasLoadedRef.current
+      ? loadTypeRef.current
+      : "initial";
+    loadTypeRef.current = "navigation";
+    setLoadingType(nextLoadingType);
     setIsLoading(true);
     const fetchPage = navigation.isHomePage ? fetchBuckets : fetchObjects;
 
@@ -429,6 +444,8 @@ const Home = () => {
       .finally(() => {
         if (!controller.signal.aborted) {
           setIsLoading(false);
+          hasLoadedRef.current = true;
+          setHasLoaded(true);
         }
       });
 
@@ -449,6 +466,7 @@ const Home = () => {
 
   const previousPageClickHandler = (event) => {
     event.stopPropagation();
+    loadTypeRef.current = "page";
     setPaginationContext((prevState) => ({
       ...prevState,
       pageHistoryIndex: Math.max(0, prevState.pageHistoryIndex - 1),
@@ -462,6 +480,7 @@ const Home = () => {
 
   const nextPageClickHandler = (event) => {
     event.stopPropagation();
+    loadTypeRef.current = "page";
     setPaginationContext((prevState) => {
       if (prevState.reachedEnd || !prevState.nextContinuationToken) {
         return prevState;
@@ -487,7 +506,7 @@ const Home = () => {
         <Header />
         <main className={classes.root}>
           <ToastContainer />
-          {isLoading ? (
+          {isLoading && !hasLoaded ? (
             <Spinner />
           ) : (
             <Contents
@@ -506,6 +525,8 @@ const Home = () => {
               onPreviousPageClick={previousPageClickHandler}
               onNextPageClick={nextPageClickHandler}
               isHomePage={navigation.isHomePage}
+              isLoading={isLoading}
+              loadingType={loadingType}
             />
           )}
         </main>
