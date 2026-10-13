@@ -12,11 +12,11 @@ const FolderTree = ({
   onSelectBucket,
   onSelectPrefix,
   loadFolders,
+  onError,
 }) => {
   const [cache, setCache] = useState({});
   const [expanded, setExpanded] = useState({});
   const [loading, setLoading] = useState({});
-  const [error, setError] = useState("");
   const [mobileOpen, setMobileOpen] = useState(false);
 
   const toggleBranch = async (bucket, prefix) => {
@@ -29,12 +29,11 @@ const FolderTree = ({
     if (cache[key] !== undefined || loading[key]) return;
 
     setLoading((current) => ({ ...current, [key]: true }));
-    setError("");
     try {
       const folders = await loadFolders(bucket, prefix);
       setCache((current) => ({ ...current, [key]: folders }));
     } catch {
-      setError("Could not load folders. Try expanding again.");
+      onError("Could not load folders. Try expanding again.");
       setExpanded((current) => ({ ...current, [key]: false }));
     } finally {
       setLoading((current) => ({ ...current, [key]: false }));
@@ -90,7 +89,6 @@ const FolderTree = ({
       </button>
       <div className={mobileOpen ? classes.panelOpen : classes.panel}>
         <h2 className={classes.title}>Browse</h2>
-        {error && <p className={classes.error} role="alert">{error}</p>}
         <ul className={classes.tree}>
           {buckets.map((bucket) => {
             const rootKey = keyFor(bucket.Name, "");

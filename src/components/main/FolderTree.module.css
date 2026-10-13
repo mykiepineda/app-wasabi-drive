@@ -115,9 +115,6 @@
   font-size: 13px;
 }
 
-.error {
-  color: #a33131;
-}
 
 @media (max-width: 767px) {
   .sidebar {

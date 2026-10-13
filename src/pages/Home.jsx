@@ -1,6 +1,10 @@
 import { useCallback, useEffect, useState } from "react";
 import { useMsal } from "@azure/msal-react";
+import { ToastContainer, toast, Slide } from "react-toastify";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faTriangleExclamation } from "@fortawesome/free-solid-svg-icons";
 import classes from "./Home.module.css";
+import "react-toastify/dist/ReactToastify.css";
 import BucketContext from "../store/bucket-context";
 import PaginationContext from "../store/pagination-context";
 import Spinner from "../components/ui/Spinner";
@@ -19,6 +23,27 @@ const INITIAL_NAVIGATION_STATE = {
   bucket: null,
   prefix: null,
 };
+
+const ToastMessage = ({ message }) => (
+  <div>
+    <h4>Error</h4>
+    <p>{message}</p>
+  </div>
+);
+
+const homeToastOptions = {
+  toastId: "home-error-toast",
+  position: "top-center",
+  autoClose: 3000,
+  hideProgressBar: true,
+  closeOnClick: true,
+  theme: "colored",
+  icon: <FontAwesomeIcon icon={faTriangleExclamation} />,
+  transition: Slide,
+};
+
+const showToastError = (message) =>
+  toast.error(<ToastMessage message={message} />, homeToastOptions);
 
 const encodePrefix = (prefix) =>
   prefix
@@ -50,7 +75,6 @@ const Home = () => {
   const { instance, accounts } = useMsal();
   const account = accounts[0];
   const [isLoading, setIsLoading] = useState(true);
-  const [errorMessage, setErrorMessage] = useState(null);
   const [contents, setContents] = useState({
     breadcrumbs: [],
     buckets: [],
@@ -383,7 +407,6 @@ const Home = () => {
 
     // Main
     setIsLoading(true);
-    setErrorMessage(null);
     const fetchPage = navigation.isHomePage ? fetchBuckets : fetchObjects;
 
     fetchPage()
@@ -397,11 +420,11 @@ const Home = () => {
           folders: [],
           files: [],
         });
-        setErrorMessage(
+        const message =
           error instanceof ApiRequestError
             ? error.message
-            : API_ERROR_MESSAGES.service
-        );
+            : API_ERROR_MESSAGES.service;
+        showToastError(message);
       })
       .finally(() => {
         if (!controller.signal.aborted) {
@@ -463,10 +486,9 @@ const Home = () => {
       <BucketContext.Provider value={bucketContext}>
         <Header />
         <main className={classes.root}>
+          <ToastContainer />
           {isLoading ? (
             <Spinner />
-          ) : errorMessage ? (
-            <p role="alert">{errorMessage}</p>
           ) : (
             <Contents
               contents={contents}
@@ -475,6 +497,7 @@ const Home = () => {
               onSelectBucket={selectBucket}
               onSelectPrefix={selectPrefix}
               loadTreeFolders={loadTreeFolders}
+              onTreeError={showToastError}
               buckets={bucketList}
               selectedBucket={navigation.bucket}
               selectedPrefix={navigation.prefix}

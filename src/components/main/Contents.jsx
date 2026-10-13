@@ -58,6 +58,7 @@ const Contents = ({
   onSelectBucket,
   onSelectPrefix,
   loadTreeFolders,
+  onTreeError,
   buckets,
   selectedBucket,
   selectedPrefix,
@@ -114,6 +115,7 @@ const Contents = ({
             onSelectBucket={onSelectBucket}
             onSelectPrefix={onSelectPrefix}
             loadFolders={loadTreeFolders}
+            onError={onTreeError}
           />
         )}
         {(!isHomePage || displayAllContents) && (
