@@ -1,0 +1,158 @@
+.sidebar {
+  min-width: 0;
+  align-self: start;
+  position: sticky;
+  top: 16px;
+  max-height: calc(100vh - 32px);
+  overflow: auto;
+  background: #fff;
+  border: 1px solid #e4e8eb;
+  border-radius: 8px;
+  box-shadow: 0 1px 3px rgb(6 31 51 / 8%);
+  overflow: hidden;
+}
+
+.title {
+  padding: 18px 18px 12px;
+  color: #21384a;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.mobileToggle {
+  display: none;
+}
+
+.panel {
+  display: block;
+}
+
+.panelOpen {
+  display: block;
+}
+
+.tree,
+.tree ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.tree {
+  padding: 0 8px 12px;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  min-height: 40px;
+  padding-left: calc(var(--depth) * 12px);
+}
+
+.expander,
+.item {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 32px;
+  min-height: 36px;
+  border-radius: 5px;
+}
+
+.expander {
+  flex: 0 0 28px;
+  color: #687985;
+  font-size: 11px;
+}
+
+.item {
+  flex: 1;
+  justify-content: flex-start;
+  gap: 9px;
+  min-width: 0;
+  padding: 0 8px;
+  text-align: left;
+  color: #344b5c;
+}
+
+.item span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.item:focus-visible,
+.expander:focus-visible,
+.mobileToggle:focus-visible {
+  outline: 2px solid #087d66;
+  outline-offset: 1px;
+}
+
+.item:hover,
+.expander:hover {
+  background: #f0f5f7;
+}
+
+.item[aria-current="page"] {
+  color: #06436a;
+  background: #e8f4f2;
+  font-weight: 700;
+}
+
+.bucketIcon {
+  color: #00bd58;
+}
+
+.folderIcon {
+  color: #e4a900;
+}
+
+.loading,
+.error {
+  padding: 8px 12px 8px 38px;
+  color: #687985;
+  font-size: 13px;
+}
+
+.error {
+  color: #a33131;
+}
+
+@media (max-width: 767px) {
+  .sidebar {
+    position: static;
+    max-height: none;
+    overflow: visible;
+    margin-bottom: 12px;
+  }
+
+  .mobileToggle {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    min-height: 46px;
+    padding: 0 14px;
+    color: #21384a;
+    font-weight: 700;
+  }
+
+  .title {
+    display: none;
+  }
+
+  .panel {
+    display: none;
+  }
+
+  .panelOpen {
+    display: block;
+    max-height: 40vh;
+    overflow: auto;
+  }
+
+  .tree {
+    padding: 0 8px 12px;
+  }
+}

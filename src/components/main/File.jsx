@@ -43,7 +43,7 @@ const Card = ({ attributes }) => {
   );
 };
 
-const File = ({ accessUrl, description }) => {
+const File = ({ accessUrl, description, viewMode }) => {
   const idx = description.lastIndexOf(".");
   const fileExtension = description.substring(idx + 1).toLowerCase();
 
@@ -148,7 +148,7 @@ const File = ({ accessUrl, description }) => {
 
   return (
     <a
-      className={classes.container}
+      className={viewMode === "list" ? classes.container + " " + classes.list : classes.container}
       href={accessUrl}
       target="_blank"
       rel="noreferrer"

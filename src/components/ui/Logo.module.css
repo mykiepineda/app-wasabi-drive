@@ -13,3 +13,9 @@
   font-weight: 400;
   color: rgb(173, 173, 173);
 }
+
+@media (max-width: 560px) {
+  .logo {
+    height: 32px;
+  }
+}

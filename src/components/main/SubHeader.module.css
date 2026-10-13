@@ -1,20 +1,38 @@
 .container {
-  background: rgb(255, 255, 255);
-  padding: 15px 30px 23px 24px;
+  background: #fff;
+  padding: 15px clamp(14px, 2.5vw, 30px) 20px;
+  min-width: 0;
 }
 
 .header > h1 {
-  font-size: 32px;
+  font-size: clamp(23px, 3vw, 32px);
+  overflow-wrap: anywhere;
 }
 
 .header {
   display: flex;
   align-items: baseline;
-  gap: 30px;
+  flex-wrap: wrap;
+  gap: 8px 24px;
+  min-width: 0;
 }
 
 .header > div {
   display: flex;
   align-items: center;
   gap: 5px;
+}
+
+.header > div p {
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 560px) {
+  .container {
+    padding: 14px 16px 16px;
+  }
+
+  .header {
+    gap: 5px 12px;
+  }
 }

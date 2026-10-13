@@ -1,5 +1,14 @@
+.workspace {
+  display: grid;
+  grid-template-columns: minmax(230px, 280px) minmax(0, 1fr);
+  align-items: start;
+  gap: 18px;
+  padding: 0 clamp(12px, 2vw, 30px);
+}
+
 .contents {
-  padding: 30px;
+  min-width: 0;
+  padding: 0 0 24px;
 }
 
 .separator {
@@ -7,9 +16,68 @@
 }
 
 .objects {
-  padding: 30px 30px 0 30px;
-  border-radius: 4px;
+  min-width: 0;
+  padding: 24px clamp(14px, 2vw, 30px) 0;
+  border-radius: 8px;
   background-color: #fff;
-  box-shadow: 0px 2px 1px -1px rgb(0 0 0 / 20%),
-    0px 1px 1px 0px rgb(0 0 0 / 14%), 0px 1px 3px 0px rgb(0 0 0 / 12%);
+  box-shadow: 0 2px 5px rgb(6 31 51 / 10%);
+}
+
+.toolbar {
+  display: flex;
+  justify-content: flex-end;
+  margin: 0 0 12px;
+}
+
+.viewToggle {
+  display: inline-flex;
+  padding: 3px;
+  gap: 2px;
+  background: #f0f4f5;
+  border-radius: 7px;
+}
+
+.viewToggle button {
+  min-height: 36px;
+  min-width: 58px;
+  padding: 0 11px;
+  border-radius: 5px;
+  color: #425766;
+  font-size: 14px;
+}
+
+.viewToggle button[aria-pressed="true"] {
+  color: #06436a;
+  background: #fff;
+  box-shadow: 0 1px 3px rgb(6 31 51 / 14%);
+  font-weight: 700;
+}
+
+.viewToggle button:focus-visible {
+  outline: 2px solid #087d66;
+  outline-offset: 2px;
+}
+
+@media (max-width: 767px) {
+  .workspace {
+    display: block;
+  }
+
+  .contents {
+    padding-bottom: 18px;
+  }
+
+  .objects {
+    padding-top: 18px;
+  }
+}
+
+@media (max-width: 560px) {
+  .toolbar {
+    margin-bottom: 8px;
+  }
+
+  .objects {
+    padding: 14px 10px 0;
+  }
 }

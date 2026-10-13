@@ -1,3 +1,17 @@
-.container select:after {
-    background-color: red;
+.container {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  white-space: nowrap;
+}
+
+.container label {
+  color: #757575;
+  font-size: 0.875rem;
+}
+
+@media (max-width: 430px) {
+  .container label {
+    font-size: 12px;
+  }
 }

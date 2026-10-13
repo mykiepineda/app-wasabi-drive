@@ -1,11 +1,13 @@
 .container {
-  margin-top: 20px;
+  margin-top: 18px;
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  gap: 20px;
+  flex-wrap: wrap;
+  gap: 8px 18px;
   border-top: 1px solid rgba(224, 224, 224, 1);
-  height: 50px;
+  min-height: 50px;
+  padding: 7px 0;
 }
 
 .container p {
@@ -13,4 +15,11 @@
   font-size: 0.875rem;
   font-family: "Roboto", "Helvetica", "Arial", sans-serif;
   font-weight: 400;
+}
+
+@media (max-width: 560px) {
+  .container {
+    justify-content: space-between;
+    gap: 8px 12px;
+  }
 }

@@ -1,4 +1,3 @@
-/* .link {
-  margin: 10px;
-  cursor: pointer;
-} */
+.root {
+  min-height: calc(100vh - 72px);
+}

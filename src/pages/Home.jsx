@@ -58,6 +58,8 @@ const Home = () => {
     files: [],
   });
   const [navigation, setNavigation] = useState(INITIAL_NAVIGATION_STATE);
+  const [bucketList, setBucketList] = useState([]);
+  const [viewMode, setViewMode] = useState("grid");
   const [bucketContext, setBucketContext] = useState({
     name: null,
     region: null,
@@ -111,33 +113,73 @@ const Home = () => {
     }));
   }, []);
 
-  const objectClickHandler = useCallback((event) => {
-    event.stopPropagation();
+  const selectPrefix = useCallback((prefix) => {
     resetPagination();
     setTurnPage((prevState) => ({
       switch: !prevState.switch,
       direction: null,
     }));
-    const prefix = event.currentTarget.dataset.prefix;
-    setNavigation((prevState) => {
-      return {
-        isHomePage: false,
-        bucket: prevState.bucket,
-        prefix,
-      };
-    });
+    setNavigation((prevState) => ({
+      isHomePage: false,
+      bucket: prevState.bucket,
+      prefix,
+    }));
   }, [resetPagination]);
 
-  const bucketClickHandler = useCallback((event) => {
+  const objectClickHandler = useCallback((event) => {
     event.stopPropagation();
+    selectPrefix(event.currentTarget.dataset.prefix);
+  }, [selectPrefix]);
+
+  const selectBucket = useCallback((bucket) => {
     resetPagination();
-    const bucket = event.currentTarget.innerText;
     setNavigation({
       isHomePage: false,
       bucket,
       prefix: null,
     });
   }, [resetPagination]);
+
+  const bucketClickHandler = useCallback((event) => {
+    event.stopPropagation();
+    selectBucket(event.currentTarget.innerText);
+  }, [selectBucket]);
+
+  const loadTreeFolders = useCallback(async (bucket, prefix, signal) => {
+    const path = process.env.REACT_APP_API_URL + "/buckets/" +
+      encodeURIComponent(bucket) + "/objects/" + (prefix ? encodePrefix(prefix) : "");
+    const folders = [];
+    let continuationToken = null;
+
+    do {
+      const url = new URL(path);
+      url.searchParams.set("MaxKeys", "1000");
+      if (continuationToken) {
+        url.searchParams.set("ContinuationToken", continuationToken);
+      }
+      const response = await authenticatedFetch(instance, account, url.toString(), {
+        method: "GET",
+        signal,
+      });
+      if (!response || signal?.aborted) {
+        return [];
+      }
+      const body = await response.json();
+      if (signal?.aborted) {
+        return [];
+      }
+      folders.push(...(body.CommonPrefixes || []).map(({ Prefix: childPrefix }) => ({
+        prefix: childPrefix,
+        description: childPrefix.substring(
+          prefix ? prefix.length : 0,
+          childPrefix.length - 1
+        ),
+      })));
+      continuationToken = body.IsTruncated ? body.NextContinuationToken : null;
+    } while (continuationToken && !signal?.aborted);
+
+    return folders;
+  }, [account, instance]);
 
   const maxKeys = navigation.isHomePage ? null : paginationContext.maxKeys;
   const pageHistoryIndex = navigation.isHomePage
@@ -190,6 +232,7 @@ const Home = () => {
         isNotEmpty: buckets.length > 0,
       }));
 
+      setBucketList(buckets);
       setContents({
         breadcrumbs: initialBreadcrumbsState,
         buckets,
@@ -429,6 +472,14 @@ const Home = () => {
               contents={contents}
               onBucketClick={bucketClickHandler}
               onObjectClick={objectClickHandler}
+              onSelectBucket={selectBucket}
+              onSelectPrefix={selectPrefix}
+              loadTreeFolders={loadTreeFolders}
+              buckets={bucketList}
+              selectedBucket={navigation.bucket}
+              selectedPrefix={navigation.prefix}
+              viewMode={viewMode}
+              onViewModeChange={setViewMode}
               onPreviousPageClick={previousPageClickHandler}
               onNextPageClick={nextPageClickHandler}
               isHomePage={navigation.isHomePage}

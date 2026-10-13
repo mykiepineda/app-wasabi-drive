@@ -1,5 +1,8 @@
 .breadcrumbs {
   display: flex;
+  flex-wrap: wrap;
+  gap: 4px 0;
+  min-width: 0;
   font-size: 13px;
   color: rgb(53, 53, 53);
 }

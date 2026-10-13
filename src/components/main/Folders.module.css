@@ -1,5 +1,10 @@
 .folders {
   display: grid;
   grid-gap: 0;
-  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 220px), 1fr));
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
 }
