@@ -43,7 +43,71 @@ const Card = ({ attributes }) => {
   );
 };
 
-const File = ({ accessUrl, description }) => {
+const getUsablePreviewUrl = (value) => {
+  if (typeof value !== "string" || value.trim() !== value || value.length === 0) {
+    return null;
+  }
+
+  try {
+    const url = new URL(value);
+    if (
+      (url.protocol === "https:" || url.protocol === "http:") &&
+      url.hostname
+    ) {
+      return value;
+    }
+  } catch {
+    return null;
+  }
+
+  return null;
+};
+
+const ImagePreview = ({ accessUrl, thumbnailAccessUrl, description }) => {
+  const originalPreviewUrl = getUsablePreviewUrl(accessUrl);
+  const thumbnailPreviewUrl = getUsablePreviewUrl(thumbnailAccessUrl);
+  const initialPreviewUrl = thumbnailPreviewUrl || originalPreviewUrl;
+  const [previewStage, setPreviewStage] = React.useState("initial");
+
+  const previewUrl =
+    previewStage === "initial"
+      ? initialPreviewUrl
+      : previewStage === "original"
+      ? originalPreviewUrl
+      : null;
+
+  if (previewStage === "unavailable") {
+    return null;
+  }
+
+  return (
+    <img
+      src={previewUrl || undefined}
+      alt={description}
+      loading="lazy"
+      decoding="async"
+      onError={() => {
+        if (
+          previewStage === "initial" &&
+          thumbnailPreviewUrl &&
+          originalPreviewUrl &&
+          thumbnailPreviewUrl !== originalPreviewUrl
+        ) {
+          setPreviewStage("original");
+        } else {
+          setPreviewStage("unavailable");
+        }
+      }}
+    />
+  );
+};
+
+const File = ({
+  prefix,
+  accessUrl,
+  thumbnailAccessUrl,
+  description,
+}) => {
   const idx = description.lastIndexOf(".");
   const fileExtension = description.substring(idx + 1).toLowerCase();
 
@@ -59,11 +123,16 @@ const File = ({ accessUrl, description }) => {
       icon: faImage,
       color: "purple",
       htmlText: (
-        <img
-          src={accessUrl}
-          alt={description}
-          loading="lazy"
-          decoding="async"
+        <ImagePreview
+          key={JSON.stringify([
+            prefix,
+            description,
+            accessUrl,
+            thumbnailAccessUrl,
+          ])}
+          accessUrl={accessUrl}
+          thumbnailAccessUrl={thumbnailAccessUrl}
+          description={description}
         />
       ),
     };
