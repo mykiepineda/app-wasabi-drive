@@ -290,6 +290,7 @@ const Home = () => {
             key,
             description,
             accessUrl: content.AccessUrl,
+            thumbnailAccessUrl: content.ThumbnailAccessUrl,
           };
         });
       }

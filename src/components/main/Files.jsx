@@ -14,6 +14,7 @@ const Files = ({ fileList, onClick }) => {
             prefix={file.key}
             description={file.description}
             accessUrl={file.accessUrl}
+            thumbnailAccessUrl={file.thumbnailAccessUrl}
             onClick={onClick}
           />
         ))}

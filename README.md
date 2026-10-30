@@ -89,6 +89,14 @@ rebuilds that historical source using the current production build-time
 configuration. It does not restore a historical byte-identical build
 artifact.
 
+### Photo-grid previews
+
+When provided by the authorized object-list response, a signed thumbnail URL
+is used only for the image-grid preview; opening the card continues to use the
+original signed URL. These URLs expire, so a thumbnail-to-original preview
+fallback does not refresh expired URLs. Refresh behavior is not currently
+automatic.
+
 ## Screenshots
 
 Login page:

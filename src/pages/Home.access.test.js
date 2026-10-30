@@ -25,9 +25,13 @@ jest.mock("../components/main/Contents", () => ({
       </button>
     ))}
     {contents.files.map((file) => (
-      <a key={file.key} href={file.accessUrl}>
-        {file.description}
-      </a>
+      <div
+        key={file.key}
+        data-testid="file"
+        data-thumbnail-access-url={file.thumbnailAccessUrl}
+      >
+        <a href={file.accessUrl}>{file.description}</a>
+      </div>
     ))}
   </div>
 ));
@@ -35,6 +39,8 @@ jest.mock("../components/main/Contents", () => ({
 const account = { username: "user@example.com" };
 const accessUrl =
   "https://objects.example.invalid/file?X-Amz-Signature=fake-signature";
+const thumbnailAccessUrl =
+  "https://objects.example.invalid/file.webp?X-Amz-Signature=fake-thumbnail";
 
 beforeEach(() => {
   useMsal.mockReturnValue({
@@ -44,7 +50,7 @@ beforeEach(() => {
   authenticatedFetch.mockReset();
 });
 
-test("carries backend AccessUrl into the rendered file", async () => {
+test("carries backend AccessUrl and ThumbnailAccessUrl into the rendered file", async () => {
   authenticatedFetch
     .mockResolvedValueOnce({
       json: async () => ({ Buckets: [{ Name: "bucket" }] }),
@@ -54,7 +60,13 @@ test("carries backend AccessUrl into the rendered file", async () => {
     })
     .mockResolvedValueOnce({
       json: async () => ({
-        Contents: [{ Key: "photo.png", AccessUrl: accessUrl }],
+        Contents: [
+          {
+            Key: "photo.jpg",
+            AccessUrl: accessUrl,
+            ThumbnailAccessUrl: thumbnailAccessUrl,
+          },
+        ],
         KeyCount: 1,
         TotalKeyCount: 1,
         MaxKeys: 10,
@@ -65,9 +77,13 @@ test("carries backend AccessUrl into the rendered file", async () => {
   fireEvent.click(await screen.findByRole("button", { name: "bucket" }));
 
   await waitFor(() =>
-    expect(screen.getByRole("link", { name: "photo.png" })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: "photo.jpg" })).toHaveAttribute(
       "href",
       accessUrl
     )
+  );
+  expect(screen.getByTestId("file")).toHaveAttribute(
+    "data-thumbnail-access-url",
+    thumbnailAccessUrl
   );
 });
