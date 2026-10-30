@@ -1,496 +1,94 @@
 # Wasabi Drive Frontend — GitHub Copilot Instructions
 
-## Project role and working agreement
+## Ownership and working agreement
 
-Wasabi Drive is an existing production application and an incremental modernization / cloud-engineering learning project.
+Wasabi Drive is an existing deployed personal application and an incremental cloud-engineering learning project. The human developer is the technical owner and architectural decision-maker. ChatGPT helps with architecture, scoping, review and prompts; GitHub Copilot in VS Code on the owner's personal laptop helps implement approved, narrowly scoped code changes.
 
-The developer is the technical owner and architectural decision-maker.
+Treat the checked-out repository as authoritative. Before changing code, inspect the latest `master`, current branch, working tree and commit SHA. Do not assume the historical snapshot used to write these instructions is still current. Stop and explain material differences rather than overwriting newer work. Do not discard uncommitted work. No changes directly on `master`.
 
-ChatGPT is used for architecture, prioritization, task scoping, implementation prompts, and code review.
+Do not independently implement adjacent roadmap items or redesign the application. Preserve the existing deployable application and established tests. Do not make commits, push, create PRs, merge, access live Wasabi resources, change secrets, or deploy unless explicitly authorized. Review terminal commands for unintended cloud or Git side effects.
 
-GitHub Copilot is an implementation assistant. Make only the explicitly requested change. Do not independently redesign the frontend, backend contract, identity architecture, storage architecture, Firebase deployment model, CI/CD model, or release process.
+## Current approved task: Phase 8C-D2 — Photo-grid thumbnail consumption
 
-Prefer small, reviewable changes over broad cleanup.
+The Phase 8C-D1 backend is deployed to TEST with `THUMBNAIL_API_ENABLED=true`. Owner-reported TEST checks confirm only two approved source objects receive `ThumbnailAccessUrl` and that signed WebP URLs retrieve successfully while unsigned access is denied. Do not rerun the completed thumbnail generation or modify the backend.
 
-Do not implement roadmap items merely because they appear in these instructions. Only the explicitly approved current task is implementation scope.
+Implement a **frontend-only additive** change: for recognized image cards, prefer the optional backend-provided `ThumbnailAccessUrl` for the grid preview. Always retain the original backend-provided `AccessUrl` as the file-opening link. Objects without thumbnails must look and behave as before.
 
-Before editing:
+Suggested branch: `feature/photo-grid-thumbnail-integration` based on current frontend `master`.
 
-1. inspect the actual current source;
-2. check the current Git branch and working tree;
-3. report the starting commit SHA where practical;
-4. preserve newer approved behavior if `master` has advanced;
-5. report a material conflict between these instructions and the current source rather than guessing.
+The frontend archive used as reference was `app-wasabi-drive-master (23).zip`, archive SHA `5bdad1a93b78c02133b2f3d694dbb15305bab840`. This is a source snapshot, not proof of deployed state or latest remote `master`.
 
-Do not discard user changes or reset a dirty working tree.
+## Architecture and security invariants
 
-## Current phase
+Preserve React 18, JavaScript, Create React App (`react-scripts` 5), Firebase Hosting, the existing CSS and visual layout, Microsoft Entra login, MSAL (Microsoft Authentication Library), the existing bearer-token API client, and separate TEST/PRD deployments.
 
-Current modernization phase:
+Preserve the identity and access flow:
+React SPA -> MSAL -> Microsoft Entra -> OAuth 2.0 API access token -> API Gateway -> Express authentication -> application authorization -> private Wasabi object.
 
-**Phase 8 — Media Performance**
+- Authentication establishes the caller's identity; backend authorization determines what that caller may access.
+- CORS (Cross-Origin Resource Sharing) is a browser access policy, not authentication.
+- `AccessUrl` and `ThumbnailAccessUrl` are temporary signed bearer URLs. Never log, print, persist, share or instrument their full query strings.
+- Neither URL is a client secret or a stable public object path. Use only values received from the authorized backend response. Never construct raw S3/Wasabi URLs, never sign in the browser, and never add browser-side Wasabi credentials or storage SDKs.
+- Do not modify MSAL, Entra, API authorization, region lookup, original URL generation, signed URL lifetimes, API Gateway, backend, bucket policies or any cloud configuration.
 
-Phase 7 — Production Reliability and Observability — is complete and production-validated.
+## Confirmed frontend integration points in the reference snapshot
 
-Completed frontend foundations include:
+- `src/pages/Home.jsx` maps `body.Contents` to `{ key, description, accessUrl }` and preserves abort/cancellation, mutually exclusive loading/error/content, breadcrumbs and continuation-token pagination.
+- `src/components/main/Files.jsx` passes each file's props to `File` using a stable `key={file.key}`.
+- `src/components/main/File.jsx` uses `<img src={accessUrl} alt={description} loading="lazy" decoding="async" />` for recognized image file extensions; the enclosing `<a href={accessUrl} target="_blank" rel="noreferrer">` opens the original. Video rendering and non-image icon handling are separate.
+- `src/components/main/File.test.js` already tests original links, image attributes, video source and safe behavior when `AccessUrl` is absent.
+- `src/pages/Home.access.test.js` tests mapping from the backend response; inspect its existing mocked `Contents` component before extending it.
 
-- Microsoft Entra authentication using MSAL;
-- OAuth 2.0 / OpenID Connect access-token based backend access;
-- removal of API-key authentication;
-- private Wasabi object access through backend-generated temporary `AccessUrl` values;
-- cursor-based pagination with opaque continuation tokens;
-- stale browse-request cancellation and stale-result protection using `AbortController`;
-- immutable breadcrumb state updates;
-- explicit authentication, authorization, service, and network error handling;
-- removal of the unused frontend AWS SDK;
-- mature frontend CI/CD with automatic Firebase test deployment and manual exact-SHA production promotion.
+Check these facts in the **current working clone** before implementation.
 
-Do not redo or redesign these completed areas unless the current task exposes a concrete defect.
+## Functional requirements
 
-## Active task
-
-The currently approved implementation task is:
-
-**Task 8A — Image-grid loading baseline and browser-native image loading optimization**
-
-Suggested branch:
-
-`perf/lazy-image-loading`
-
-Task 8A is frontend-only.
-
-Do not automatically proceed to video optimization, thumbnail generation, or another Phase 8 task after completing it.
-
-## Phase 8 engineering principle
-
-Use:
-
-**measure -> make the smallest useful change -> measure again**
-
-Prefer browser-native capabilities before adding libraries, abstractions, infrastructure, or custom loading mechanisms.
-
-Infrastructure must earn its place through measured need.
-
-## Stable frontend architecture
-
-Preserve:
-
-- React 18;
-- Create React App / `react-scripts` 5;
-- JavaScript;
-- Firebase Hosting;
-- separate Firebase `test` and production projects;
-- MSAL — Microsoft Authentication Library;
-- Microsoft Entra authentication;
-- OAuth 2.0 / OIDC access-token flow;
-- bearer-token backend access;
-- cursor-based bucket/folder pagination;
-- backend-generated short-lived `AccessUrl` values for private Wasabi objects;
-- explicit `401`, `403`, service, and network error handling;
-- stale request protection using `AbortController`;
-- existing visual file grid and CSS;
-- existing backend API contract.
-
-OIDC = OpenID Connect, the identity layer used alongside OAuth 2.0.
-
-Do not introduce during Task 8A:
-
-- Redux or another state-management framework;
-- React Query / TanStack Query;
-- TypeScript;
-- Vite or another Create React App replacement;
-- a React major-version upgrade;
-- Firebase Authentication;
-- Firestore;
-- Realtime Database;
-- Cloud Functions;
-- another hosting platform;
-- an image-processing library;
-- a lazy-loading package;
-- a custom `IntersectionObserver` implementation.
-
-## Security and identity invariants
-
-Preserve the approved flow:
-
-React SPA
--> MSAL
--> Microsoft Entra
--> OAuth 2.0 API access token
--> API Gateway
--> Express backend authentication
--> application authorization
--> private Wasabi storage.
-
-The backend remains the security authority.
-
-Frontend state is not authorization.
-
-CORS — Cross-Origin Resource Sharing — is a browser access policy, not authentication.
-
-Browser-visible frontend configuration is not secret.
-
-Never introduce:
-
-- a Microsoft Entra client secret into the SPA;
-- API keys as user authentication;
-- Wasabi credentials into the browser;
-- an AWS/Wasabi storage SDK into the frontend;
-- client-side signing;
-- raw/public Wasabi object URLs;
-- frontend authorization as a substitute for backend authorization.
-
-Do not log or expose bearer tokens or complete presigned URL query values.
-
-## Private object access invariant
-
-Wasabi objects remain private.
-
-The backend supplies a temporary `AccessUrl` for each listed object.
-
-The frontend must continue to consume that exact backend-provided `AccessUrl`.
-
-For an image card:
-
-- the `<img>` source must remain the supplied `accessUrl`;
-- the object link must remain the supplied `accessUrl`.
-
-Never derive, reconstruct, manipulate, or guess a Wasabi storage URL from the bucket name, object key, region, or filename.
-
-The current backend presigned URL lifetime is approximately one hour.
-
-Native lazy loading may delay the browser's first request for an off-screen image. An image first requested after the `AccessUrl` has expired could fail. This is an accepted known limitation for Task 8A.
-
-Do not build URL-refresh functionality during this task.
-
-## Cursor pagination invariant
-
-Preserve the existing cursor pagination behavior:
-
-- opaque continuation-token handling;
-- safe query encoding;
-- page history;
-- previous/next navigation;
-- Objects-per-page behavior;
-- reset behavior when changing folder or page size;
-- no `TotalKeyCount`;
-- no full-list traversal.
-
-Current user-selectable page sizes include:
-
-- 10;
-- 25;
-- 50;
-- 100.
-
-Do not change these values during Task 8A.
-
-## Frontend reliability invariants
-
-Preserve the Phase 7 stale-request safeguards.
-
-Do not weaken or remove:
-
-- `AbortController`;
-- signal propagation into authenticated API requests;
-- stale-result guards following asynchronous boundaries;
-- special treatment of intentional `AbortError`;
-- protection against an old request clearing or replacing newer state;
-- immutable breadcrumb behavior.
-
-Task 8A does not require changes to `Home.jsx` or `api-client.js` unless the actual current source demonstrates a concrete reason.
-
-## Existing CI/CD is an invariant
-
-Preserve:
-
-- `.github/workflows/frontend-pr-checks.yml`;
-- `.github/workflows/frontend-test-deploy.yml`;
-- `.github/workflows/frontend-prd-deploy.yml`.
-
-The approved release flow remains:
-
-feature branch
--> pull request
--> CI
--> protected `master`
--> automatic Firebase `test` deployment
--> validation
--> manual exact-SHA production promotion.
-
-Production does not automatically deploy on merge.
-
-Do not change:
-
-- pinned GitHub Action SHAs;
-- Node.js 24;
-- Google Workload Identity Federation;
-- deployment identities;
-- Firebase project targeting;
-- production manual workflow dispatch;
-- exact-SHA verification;
-- detached production checkout;
-- build-time `REACT_APP_*` configuration behavior.
-
-Task 8A requires no CI/CD changes.
-
-## Task 8A source context
-
-The reviewed `master` snapshot currently shows:
-
-- `src/components/main/File.jsx` renders an image using the backend-provided `accessUrl`;
-- the image currently has no `loading` attribute;
-- the image currently has no `decoding` attribute;
-- the same `accessUrl` is used by the enclosing object link;
-- `File.module.css` displays image/video media inside a roughly 150px-high card using `object-fit: cover`;
-- video cards use the existing `<video>` / `<source>` implementation without an explicit preload policy;
-- `File.test.js` already checks authorized image URLs, object links, video source URLs, and absence of constructed raw Wasabi URLs.
-
-Verify these assumptions against the current working clone before editing.
-
-If the current source differs materially, stop and report the difference instead of blindly applying an outdated patch.
-
-## Task 8A objective
-
-Reduce unnecessary initial image downloading and decoding work in image-heavy folders using the smallest browser-native change.
-
-The intended implementation is to add native image loading hints to image-card `<img>` elements while preserving all existing URLs, navigation, styling, security, and component behavior.
-
-Expected form:
-
-`loading="lazy"`
-
-and:
-
-`decoding="async"`
-
-These attributes apply only to image rendering.
-
-`loading="lazy"` tells a supporting browser that an off-screen image may be deferred until it approaches the viewport.
-
-`decoding="async"` requests asynchronous image decoding so image decoding is less likely to block other rendering work.
-
-These are browser hints; do not implement custom scheduling around them.
-
-## Required implementation behavior
-
-For image cards:
-
-- keep `src={accessUrl}`;
-- keep the existing `alt` text;
-- add `loading="lazy"`;
-- add `decoding="async"`.
-
-Preserve the enclosing link:
-
-- keep `href={accessUrl}`;
-- keep the current new-tab behavior;
-- keep existing `rel` behavior.
-
-Preserve all current CSS and visual layout unless the current source reveals a concrete bug directly caused by the change.
-
-Do not add new state, effects, props, hooks, helpers, abstractions, or dependencies merely to apply these native attributes.
-
-## Video boundary
-
-Do not modify video loading behavior during Task 8A.
-
-Do not add or change:
-
-- `preload`;
-- `poster`;
-- autoplay behavior;
-- controls;
-- video metadata fetching;
-- custom video intersection/loading logic.
-
-Video behavior will be measured separately only if Task 8B is later approved.
-
-## Expected files
-
-Inspect at minimum:
-
-- `src/components/main/File.jsx`;
-- `src/components/main/File.module.css`;
-- `src/components/main/Files.jsx`;
-- `src/components/main/File.test.js`;
-- relevant pagination/page-size components;
-- `.github/copilot-instructions.md`.
-
-The implementation itself should normally require only a very small change, likely:
-
-- `src/components/main/File.jsx`;
-- `src/components/main/File.test.js`.
-
-Do not modify unrelated files simply because they were inspected.
-
-Do not modify package manifests.
+1. In `Home.jsx`, map the optional API field `ThumbnailAccessUrl` without changing the existing object data, pagination or API request flow. A consistent local property such as `thumbnailAccessUrl` is sufficient.
+2. In `Files.jsx`, pass the optional value through to `File`, preserving `key={file.key}` and the existing `accessUrl`.
+3. In `File.jsx`, for an existing recognized image card, prefer a usable `thumbnailAccessUrl` as the preview `img.src` when present. The card link **must remain `href={accessUrl}`**, never the thumbnail. Preserve `target`, `rel`, `alt`, `loading="lazy"`, `decoding="async"` and current CSS.
+4. If the thumbnail image reports a load error, try the supplied original `accessUrl` **once** for ordinary browser-supported image formats. If the original preview also fails, show a finite unavailable-preview state (the existing file icon can be used) rather than a retry loop or broken-image churn. The original link remains unchanged.
+5. When file identity and/or signed URL props change, reset previous image-error/fallback state. In particular, do not let failure from the previous object or expired signature poison a refreshed file card. Use the smallest reliable approach (state keyed by identity/URLs, or a focused preview child if needed).
+6. If `ThumbnailAccessUrl` is absent, preserve the pre-existing preview behavior. If either field is missing or malformed, do not invent alternative object locations. Do not use thumbnail URLs for video, downloads, links, or file types that the component does not already render as images.
+7. The current production pilot is JPEG-only. Do not silently introduce CR2/RAW or JFIF previews, and do not assume that all formats supported by the thumbnail generator are supported by a browser. Leave existing format classification unchanged unless a concrete directly related test exposes a bug.
+8. Do not request thumbnails separately. The backend already supplies the optional field in the authorized object-list response. Do not add metadata HEAD requests, existence probes, image APIs, caches, analytics, external libraries, workers or frontend feature flags.
+9. The API's one-hour signed URLs may expire in a long-open page. A thumbnail->original fallback is not an expiry-refresh strategy. Record the limitation without implementing automatic URL refresh in this task.
 
 ## Required tests
 
-Preserve every existing frontend test.
+Use synthetic, non-live signed-URL fixtures (e.g. `https://objects.example.invalid/...?X-Amz-Signature=fake-*`). Never embed real signatures, private filenames, credentials or photo paths.
 
-Update or add focused tests proving:
+- API response mapping: `Home.jsx` carries `ThumbnailAccessUrl` through to file data without losing `AccessUrl`.
+- A JPEG card with both URLs uses the thumbnail `img.src` while `<a href>` remains the original.
+- Cards without a thumbnail keep the original preview and link unchanged.
+- An image error on the thumbnail falls back to the original once; error on the original enters a bounded unavailable-preview state with no loop.
+- Changed `file.key` and/or new signed URL props reset error state and allow a new preview attempt.
+- Keep `alt`, lazy loading and async decoding; do not change the video source or non-image cards.
+- Missing original `AccessUrl` must not cause client-side construction of raw object URLs.
+- Preserve existing pagination, stale-response cancellation, auth and access tests. Do not weaken tests to pass, and do not replace focused assertions with snapshots merely to avoid behavior checks.
 
-1. an image continues to use the backend-provided `accessUrl` as its `src`;
-2. the enclosing object link continues to use the same `accessUrl`;
-3. an image has `loading="lazy"`;
-4. an image has `decoding="async"`;
-5. no raw Wasabi URL construction is introduced;
-6. existing video rendering remains unchanged;
-7. ordinary non-image file behavior remains unchanged.
+Preferred files: `src/pages/Home.jsx`, `src/components/main/Files.jsx`, `src/components/main/File.jsx`, `src/components/main/File.test.js`, `src/pages/Home.access.test.js`, minimal `README.md` section and this instructions file. Add a focused `Files` test only if that is the smallest reliable way to prove prop forwarding. Do not touch `package.json`, package-lock, workflow YAML, build tooling, environment variables or unrelated CSS.
 
-Prefer extending the existing `File.test.js` rather than introducing a new test architecture.
+Run locally with Node.js 24:
 
-Do not weaken existing tests to make the change pass.
+```powershell
+npm run test:ci
+npm run build
+git diff --check
+git status --short
+```
 
-Known React `act(...)` warnings elsewhere may remain unless this task directly changes the responsible test.
+Report actual results and warnings. No live Wasabi calls or deployments are needed for mocked implementation tests.
 
-Do not turn Task 8A into broad test cleanup.
+## Deployment, validation and rollback context
 
-Run:
+- `master` is protected. Work on a focused task branch and submit changes for owner review before a PR/merge.
+- The frontend `master` merge triggers existing GitHub Actions tests/build and Firebase TEST deployment; do not merge until reviewed.
+- Production remains a separate manual exact-commit-SHA promotion after TEST validation and production backend operational gates.
+- In browser TEST validation, check that only the two approved sample images request WebP preview URLs; opening each card still loads the original. Keep Network screenshots/HAR exports sanitized because signatures and private paths may appear.
+- For performance, capture comparable TEST before/after network evidence; two images demonstrate wiring but are not a statistically meaningful production performance result. Production 13-photo before/after measurement is a separate later gate.
+- Roll back frontend by promoting the previous known-good frontend commit; older frontend code ignores `ThumbnailAccessUrl`. New frontend code must tolerate it being absent if the backend feature is disabled.
+- Do not change the 13-photo production backfill, v1 keying or recipe, checkpoints, credential policies, image viewer UX, video expiry, React framework, styling framework or broader roadmap.
 
-`npm run test:ci`
+## Copilot completion report
 
-`npm run build`
-
-Also run:
-
-`git diff --check`
-
-## Performance measurement boundary
-
-Manual browser performance measurement is performed against the stable Firebase `test` environment using browser developer tools.
-
-Do not add:
-
-- application analytics;
-- permanent benchmark code;
-- performance telemetry;
-- new browser instrumentation dependencies.
-
-Copilot must not invent baseline or after-change measurements.
-
-If measurement results have not been supplied, report them as not yet measured.
-
-The principal measurement is initial/pre-scroll image network activity.
-
-Remember:
-
-- lazy loading changes when an original image downloads;
-- it does not reduce the byte size of that original image;
-- total bytes after scrolling through every image may remain similar.
-
-## Task 8A explicit non-goals
-
-Do NOT during Task 8A:
-
-- modify the backend;
-- modify API responses;
-- modify backend presigned URL generation;
-- modify the `AccessUrl` lifetime;
-- build `AccessUrl` refresh logic;
-- change object privacy;
-- change Wasabi bucket policies;
-- add thumbnail generation;
-- generate derived images;
-- add SNS;
-- add SQS;
-- add another Lambda function;
-- add another AWS service;
-- add a CDN or CloudFront;
-- add image-processing infrastructure;
-- add an image library;
-- add a lazy-loading library;
-- add `IntersectionObserver`;
-- change video preload behavior;
-- redesign file cards;
-- redesign the UI;
-- change page-size choices;
-- change pagination;
-- modify MSAL/Entra;
-- modify authentication or authorization;
-- modify request cancellation;
-- migrate Create React App;
-- upgrade React;
-- add TypeScript;
-- perform dependency modernization;
-- run `npm audit fix`;
-- modify Firebase configuration;
-- modify GitHub Actions workflows;
-- implement an image viewer;
-- implement previous/next image navigation;
-- perform unrelated cleanup or formatting.
-
-Task 8A must remain a very small frontend performance PR.
-
-## Git/change-management
-
-`master` is protected.
-
-Use:
-
-`perf/lazy-image-loading`
-
-Never implement or commit directly on `master`.
-
-Before editing, verify the current branch and starting SHA.
-
-Do not reset, overwrite, or discard existing user work.
-
-Do not force-push.
-
-Do not push, merge, deploy, or promote production unless explicitly instructed.
-
-Keep the diff narrowly scoped.
-
-If commits are explicitly requested, suitable focused messages are:
-
-`perf(frontend): defer offscreen image loading`
-
-`test(frontend): cover lazy image rendering`
-
-A single small cohesive commit is also acceptable if that produces a clearer review.
-
-Do not mix unrelated cleanup into the Task 8A commits.
-
-## Deployment and rollback context
-
-After review and merge to `master`, the existing workflow automatically builds, tests, and deploys to Firebase `test`.
-
-The owner will then repeat browser performance measurements and functional regression testing.
-
-Production promotion remains a separate manual exact-SHA action.
-
-Rollback uses the existing production workflow to promote the previous known-good frontend `master` SHA.
-
-No backend deployment or rollback is expected for Task 8A.
-
-## Completion report
-
-After implementation, stop and report:
-
-- branch name;
-- starting/base SHA;
-- current HEAD SHA if different;
-- files changed;
-- exact image element change;
-- confirmation that image `src` still uses the supplied `accessUrl`;
-- confirmation that object `href` still uses the supplied `accessUrl`;
-- confirmation that video code was not changed;
-- tests added or modified;
-- exact `npm run test:ci` result and test counts;
-- exact `npm run build` result;
-- `git diff --check` result;
-- `git status --short`;
-- confirmation that package files were unchanged;
-- confirmation that workflows were unchanged;
-- confirmation that CSS/layout was unchanged unless explicitly necessary;
-- confirmation that MSAL/Entra, pagination, request cancellation, backend contract, and `AccessUrl` architecture were unchanged;
-- baseline/performance measurement results only if they were actually supplied or performed;
-- any observed risk involving `AccessUrl` expiry;
-- any remaining issue.
-
-Stop after Task 8A.
-
-Do not automatically implement Task 8B, change video loading, design thumbnails, or add infrastructure.
+Stop after this task and report: branch/base SHA; changed files; exactly where thumbnail data is mapped/passed/rendered; original-link preservation; error fallback and state reset behavior; relevant tests and exact test counts; build result; `git diff --check`; `git status --short`; any signed-URL expiry limitation; anything not verified. Leave changes uncommitted unless the owner expressly directs otherwise. Do not push, merge, deploy or access live resources.
