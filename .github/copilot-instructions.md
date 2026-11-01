@@ -1,74 +1,66 @@
-# Wasabi Drive Frontend — GitHub Copilot Instructions
+# Wasabi Drive Frontend - GitHub Copilot Instructions
 
 ## Ownership and working agreement
 
-Wasabi Drive is an existing deployed personal application and an incremental cloud-engineering learning project. The human developer is the technical owner and architectural decision-maker. ChatGPT helps with architecture, scoping, review and prompts; GitHub Copilot in VS Code on the owner's personal laptop helps implement approved, narrowly scoped code changes.
+Wasabi Drive is an existing deployed personal application and an incremental engineering learning project. The human owner approves architecture, code scope, Git operations, and deployment. ChatGPT scopes and reviews; GitHub Copilot implements approved, narrowly scoped work.
 
-Treat the checked-out repository as authoritative. Before changing code, inspect the latest `master`, current branch, working tree and commit SHA. Do not assume the historical snapshot used to write these instructions is still current. Stop and explain material differences rather than overwriting newer work. Do not discard uncommitted work. No changes directly on `master`.
+Treat the current local repository as authoritative. Inspect the branch, clean/dirty working tree, current commit, and latest code before making edits. The reference snapshot in the owner's review is `app-wasabi-drive-master (24).zip`, with embedded commit `f371b6447f3ca8519c9f6a40f3be31fb197d7a64`; this does not independently prove deployed production state. If the working clone differs materially, report the differences before changing anything. Do not discard existing edits.
 
-Do not independently implement adjacent roadmap items or redesign the application. Preserve the existing deployable application and established tests. Do not make commits, push, create PRs, merge, access live Wasabi resources, change secrets, or deploy unless explicitly authorized. Review terminal commands for unintended cloud or Git side effects.
+Work on a focused task branch based on current `master`, not on `master` itself. Do not commit, push, open a PR, merge, access live Wasabi, edit credentials, or deploy without explicit permission. A merge into `master` can automatically trigger the TEST deployment, so it is not a harmless review action.
 
-## Current approved task: Phase 8C-D2 — Photo-grid thumbnail consumption
+## Current approved task: Phase 8D-A - Local frontend photo-grid layout trial
 
-The Phase 8C-D1 backend is deployed to TEST with `THUMBNAIL_API_ENABLED=true`. Owner-reported TEST checks confirm only two approved source objects receive `ThumbnailAccessUrl` and that signed WebP URLs retrieve successfully while unsigned access is denied. Do not rerun the completed thumbnail generation or modify the backend.
+Phase 8C's original 13-photo thumbnail rollout is completed, deployed, and owner-validated. Do not reopen generation, migration, or operational verification. The owner's approved next step is to **try a fixed-width, nearly square photo/file preview grid in the frontend** before deciding whether a new physically cropped thumbnail recipe is justified.
 
-Implement a **frontend-only additive** change: for recognized image cards, prefer the optional backend-provided `ThumbnailAccessUrl` for the grid preview. Always retain the original backend-provided `AccessUrl` as the file-opening link. Objects without thumbnails must look and behave as before.
+- Frontend-only, minimal, reversible CSS change; preserve all backend and deployed data contracts.
+- The owner wants a Google Drive-like grid in which a card does not keep growing as browser width increases. More columns should fit on wider screens; cards should wrap into fewer columns on narrow screens.
+- Initial target: a roughly **200 x 190 CSS pixel image preview area** (ratio 20:19, about 1.05:1). Existing 7px card margin and 1px border suggest a ~216px CSS grid track; use the actual computed layout rather than hardcoding unverified assumptions.
+- Use the existing browser `object-fit: cover` with **centered crop** (`object-position: center`) to preview the appearance. Preserve the existing label/filename area below the preview. It is acceptable that the complete card is taller than 190px.
+- Card dimensions should be stable at normal desktop/tablet widths. On a viewport narrower than one card, the card should be allowed to shrink to fit without horizontal page overflow; avoid gratuitous breakpoints.
+- Keep card rows left-aligned rather than distributing leftover width across cards.
+- Apply to the **Files** grid first, including its existing image and non-image file cards. Keep Buckets and Folders layouts unchanged unless the owner approves a separate follow-up.
+- No new derivative images, altered WebP quality, server APIs, local generation or viewer-preview features in this task. CSS cropping does not reduce file transfer bytes. Do not claim a performance improvement without measurement.
 
-Suggested branch: `feature/photo-grid-thumbnail-integration` based on current frontend `master`.
+Suggested branch: `experiment/fixed-photo-grid-cards`.
 
-The frontend archive used as reference was `app-wasabi-drive-master (23).zip`, archive SHA `5bdad1a93b78c02133b2f3d694dbb15305bab840`. This is a source snapshot, not proof of deployed state or latest remote `master`.
+## Frontend architecture and access/security invariants
 
-## Architecture and security invariants
+Keep React 18, JavaScript, Create React App (`react-scripts` 5), current CSS Modules, Firebase Hosting, existing API and routing, Microsoft Entra authentication, MSAL (Microsoft Authentication Library), bearer token API client, and current TEST/PRD deployment setup. Do not introduce new CSS frameworks, component libraries, state management, or build tools.
 
-Preserve React 18, JavaScript, Create React App (`react-scripts` 5), Firebase Hosting, the existing CSS and visual layout, Microsoft Entra login, MSAL (Microsoft Authentication Library), the existing bearer-token API client, and separate TEST/PRD deployments.
+Identity flow: React single-page application (SPA) -> MSAL -> Microsoft Entra -> OAuth 2.0 API access token -> API Gateway -> Express backend authentication -> application authorization -> private Wasabi.
 
-Preserve the identity and access flow:
-React SPA -> MSAL -> Microsoft Entra -> OAuth 2.0 API access token -> API Gateway -> Express authentication -> application authorization -> private Wasabi object.
+- Authentication and server-side authorization remain backend responsibilities. CSS, frontend state, and CORS (Cross-Origin Resource Sharing) are not security controls.
+- `AccessUrl` and `ThumbnailAccessUrl` are private, expiring signed URLs supplied by the authorized API. Never construct, rewrite, log or expose their full query strings; do not introduce browser-side Wasabi or S3 credentials or storage SDKs.
+- Existing cards preview `ThumbnailAccessUrl` when provided; the card opens the unchanged original `AccessUrl`. Thumbnail failures have a bounded original fallback. Preserve `href`, `target`, `rel`, `alt`, `loading="lazy"`, `decoding="async"`, state reset on changed URLs and identity, and the missing/unavailable-preview behavior.
+- Do not change Microsoft Entra/MSAL, API calls, pagination, continuation token handling, loading or error states, signed URL expiration, bucket permissions, backend generation or signing, or any production/test configuration.
+- Preserve video and non-image file handling, filenames, tooltips, and click targets. Do not silently add new image extensions.
 
-- Authentication establishes the caller's identity; backend authorization determines what that caller may access.
-- CORS (Cross-Origin Resource Sharing) is a browser access policy, not authentication.
-- `AccessUrl` and `ThumbnailAccessUrl` are temporary signed bearer URLs. Never log, print, persist, share or instrument their full query strings.
-- Neither URL is a client secret or a stable public object path. Use only values received from the authorized backend response. Never construct raw S3/Wasabi URLs, never sign in the browser, and never add browser-side Wasabi credentials or storage SDKs.
-- Do not modify MSAL, Entra, API authorization, region lookup, original URL generation, signed URL lifetimes, API Gateway, backend, bucket policies or any cloud configuration.
+## Source integration points - verify in the working clone
 
-## Confirmed frontend integration points in the reference snapshot
+The reference snapshot includes:
 
-- `src/pages/Home.jsx` maps `body.Contents` to `{ key, description, accessUrl }` and preserves abort/cancellation, mutually exclusive loading/error/content, breadcrumbs and continuation-token pagination.
-- `src/components/main/Files.jsx` passes each file's props to `File` using a stable `key={file.key}`.
-- `src/components/main/File.jsx` uses `<img src={accessUrl} alt={description} loading="lazy" decoding="async" />` for recognized image file extensions; the enclosing `<a href={accessUrl} target="_blank" rel="noreferrer">` opens the original. Video rendering and non-image icon handling are separate.
-- `src/components/main/File.test.js` already tests original links, image attributes, video source and safe behavior when `AccessUrl` is absent.
-- `src/pages/Home.access.test.js` tests mapping from the backend response; inspect its existing mocked `Contents` component before extending it.
+- `src/components/main/Files.module.css`: `.files` currently uses `grid-template-columns: repeat(auto-fill, minmax(220px, 1fr))`; the `1fr` lets tracks stretch across available horizontal space.
+- `src/components/main/File.module.css`: `.card-container` has fixed 150px height; `.foreground img, .foreground video` use `object-fit: cover` and `object-position: top`; `.container` has 7px margin, 1px border and box-sizing border-box.
+- `src/components/main/Files.jsx`: creates cards from a file list; supplies thumbnail and original URLs.
+- `src/components/main/File.jsx`: renders preview and card link, including fallback behavior; do not modify unless CSS alone cannot meet the approved UX.
+- `src/components/main/Folders.module.css` and `Buckets.module.css` have similar expanding grids but are out of scope for this trial.
+- `src/components/main/Contents.module.css` has page/object padding, which limits usable width on narrow viewports. Check small-screen overflow when validating CSS.
 
-Check these facts in the **current working clone** before implementation.
+Preferred source edit scope: `Files.module.css` and `File.module.css` only, plus this instruction file. If actual source requires a small JSX or test change, explain its need before expanding. Avoid touching `package.json`, lockfiles, workflows, env files or backend.
 
-## Functional requirements
+## Acceptance criteria
 
-1. In `Home.jsx`, map the optional API field `ThumbnailAccessUrl` without changing the existing object data, pagination or API request flow. A consistent local property such as `thumbnailAccessUrl` is sufficient.
-2. In `Files.jsx`, pass the optional value through to `File`, preserving `key={file.key}` and the existing `accessUrl`.
-3. In `File.jsx`, for an existing recognized image card, prefer a usable `thumbnailAccessUrl` as the preview `img.src` when present. The card link **must remain `href={accessUrl}`**, never the thumbnail. Preserve `target`, `rel`, `alt`, `loading="lazy"`, `decoding="async"` and current CSS.
-4. If the thumbnail image reports a load error, try the supplied original `accessUrl` **once** for ordinary browser-supported image formats. If the original preview also fails, show a finite unavailable-preview state (the existing file icon can be used) rather than a retry loop or broken-image churn. The original link remains unchanged.
-5. When file identity and/or signed URL props change, reset previous image-error/fallback state. In particular, do not let failure from the previous object or expired signature poison a refreshed file card. Use the smallest reliable approach (state keyed by identity/URLs, or a focused preview child if needed).
-6. If `ThumbnailAccessUrl` is absent, preserve the pre-existing preview behavior. If either field is missing or malformed, do not invent alternative object locations. Do not use thumbnail URLs for video, downloads, links, or file types that the component does not already render as images.
-7. The current production pilot is JPEG-only. Do not silently introduce CR2/RAW or JFIF previews, and do not assume that all formats supported by the thumbnail generator are supported by a browser. Leave existing format classification unchanged unless a concrete directly related test exposes a bug.
-8. Do not request thumbnails separately. The backend already supplies the optional field in the authorized object-list response. Do not add metadata HEAD requests, existence probes, image APIs, caches, analytics, external libraries, workers or frontend feature flags.
-9. The API's one-hour signed URLs may expire in a long-open page. A thumbnail->original fallback is not an expiry-refresh strategy. Record the limitation without implementing automatic URL refresh in this task.
+1. At normal browser widths, the file card and preview do not widen merely because more horizontal space becomes available.
+2. Cards add/remove columns and wrap as the viewport changes; extra space stays at the row end rather than stretching cards.
+3. Initial preview width/height is approximately 200 x 190 CSS pixels, with centred CSS cropping. The filename bar stays underneath and is not clipped.
+4. The grid has no horizontal page overflow at small viewport widths, including where the content container becomes narrower than a standard card.
+5. Landscape, portrait and already square previews fill the same frame. Physical image files and `ThumbnailAccessUrl` remain unchanged.
+6. The existing loading/error, fallback, original-opening behavior, video/non-image cards, and pagination remain unchanged.
+7. Existing tests pass and build succeeds. Do not alter tests just to get a green result. Tests in JSDOM do not demonstrate actual layout; require **owner-operated browser inspection** before deciding whether to proceed.
 
-## Required tests
+## Checks and owner-operated manual review
 
-Use synthetic, non-live signed-URL fixtures (e.g. `https://objects.example.invalid/...?X-Amz-Signature=fake-*`). Never embed real signatures, private filenames, credentials or photo paths.
-
-- API response mapping: `Home.jsx` carries `ThumbnailAccessUrl` through to file data without losing `AccessUrl`.
-- A JPEG card with both URLs uses the thumbnail `img.src` while `<a href>` remains the original.
-- Cards without a thumbnail keep the original preview and link unchanged.
-- An image error on the thumbnail falls back to the original once; error on the original enters a bounded unavailable-preview state with no loop.
-- Changed `file.key` and/or new signed URL props reset error state and allow a new preview attempt.
-- Keep `alt`, lazy loading and async decoding; do not change the video source or non-image cards.
-- Missing original `AccessUrl` must not cause client-side construction of raw object URLs.
-- Preserve existing pagination, stale-response cancellation, auth and access tests. Do not weaken tests to pass, and do not replace focused assertions with snapshots merely to avoid behavior checks.
-
-Preferred files: `src/pages/Home.jsx`, `src/components/main/Files.jsx`, `src/components/main/File.jsx`, `src/components/main/File.test.js`, `src/pages/Home.access.test.js`, minimal `README.md` section and this instructions file. Add a focused `Files` test only if that is the smallest reliable way to prove prop forwarding. Do not touch `package.json`, package-lock, workflow YAML, build tooling, environment variables or unrelated CSS.
-
-Run locally with Node.js 24:
+Use Node.js 24 in the owner's local clone. Run:
 
 ```powershell
 npm run test:ci
@@ -77,18 +69,12 @@ git diff --check
 git status --short
 ```
 
-Report actual results and warnings. No live Wasabi calls or deployments are needed for mocked implementation tests.
+If configured for local frontend testing, the owner can use `npm start`; it starts a local development server, not a Firebase deployment. Never execute `npm run deploy:test`, `npm run deploy:prd`, `firebase deploy`, cloud operations, or live API tests autonomously.
 
-## Deployment, validation and rollback context
+For the owner's local visual inspection, provide a checklist for responsive widths around 1440, 1024, 768, 430, 375, and 320 CSS pixels, plus browser resizing and zoom. Test a populated folder with landscape and portrait images, an image without a verified thumbnail, a mixed non-image/video card, a long filename, and a small-file-count last row if accessible. The owner may choose to load their authorized private content locally; Copilot must not fetch it independently. Observe dimensions, wrapping, alignment, image cropping, missing previews, and horizontal overflow. Use the browser Network panel only if relevant, and never share unredacted signed URLs or private paths.
 
-- `master` is protected. Work on a focused task branch and submit changes for owner review before a PR/merge.
-- The frontend `master` merge triggers existing GitHub Actions tests/build and Firebase TEST deployment; do not merge until reviewed.
-- Production remains a separate manual exact-commit-SHA promotion after TEST validation and production backend operational gates.
-- In browser TEST validation, check that only the two approved sample images request WebP preview URLs; opening each card still loads the original. Keep Network screenshots/HAR exports sanitized because signatures and private paths may appear.
-- For performance, capture comparable TEST before/after network evidence; two images demonstrate wiring but are not a statistically meaningful production performance result. Production 13-photo before/after measurement is a separate later gate.
-- Roll back frontend by promoting the previous known-good frontend commit; older frontend code ignores `ThumbnailAccessUrl`. New frontend code must tolerate it being absent if the backend feature is disabled.
-- Do not change the 13-photo production backfill, v1 keying or recipe, checkpoints, credential policies, image viewer UX, video expiry, React framework, styling framework or broader roadmap.
+## Rollout and decision gate
 
-## Copilot completion report
+This trial changes only frontend presentation; a CSS revert restores the previous grid. Keep the application deployable. Stop after code/test results and the owner's local visual review request; do not merge or deploy without approval. The owner's acceptance of layout will trigger a **separate design and approval gate** for any new centre-cropped physical thumbnail recipe (new immutable version, backend scope/signing compatibility, preservation of existing v1 data). The planned Photo Viewer is a future-feature handoff item, not part of Phase 8D.
 
-Stop after this task and report: branch/base SHA; changed files; exactly where thumbnail data is mapped/passed/rendered; original-link preservation; error fallback and state reset behavior; relevant tests and exact test counts; build result; `git diff --check`; `git status --short`; any signed-URL expiry limitation; anything not verified. Leave changes uncommitted unless the owner expressly directs otherwise. Do not push, merge, deploy or access live resources.
+Completion report: branch/base SHA, changed files, measured/computed card dimensions if available, implementation summary, actual test/build results and warnings, `git diff --check`, `git status --short`, unverified browser cases, and exact owner decisions requested. Do not present a simulated screenshot or claim browser verification if not performed.
